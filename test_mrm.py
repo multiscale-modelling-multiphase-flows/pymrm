@@ -1,6 +1,8 @@
 import numpy as np
-from scipy.sparse import csr_matrix
+import scipy.sparse.linalg as sla
 from py_mrm import *
+
+
 
 # Sample input data
 dim = 1
@@ -25,16 +27,16 @@ print("grad(x_c):")
 print(Grad.dot(x_c.reshape(-1,1)) + grad_bc)
 
 nu = lambda r: r
-Div = construct_div(dim, sz, x_f, nu)
+Div = construct_div(dim, sz, x_f, 1)
 print("Div matrix:")
 print(Div.toarray())
 print("div(x_f):")
 print(Div.dot(x_f.reshape(-1,1)))
 
-c = np.ones((4,2))
-f = lambda c: c*c[:,(1,0)]
-Jac, val = numjac_local(0, f, c)
-print(Jac.toarray())
+rng = np.random.default_rng()
+c = rng.random((2,3,2,5))
+f = lambda c: c*c[:,:,(1,0),:]
+Jac, val = numjac_local(2, f, c)
 
 bc = {
     'a': [0, 0],
