@@ -4,47 +4,157 @@ Author: E.A.J.F. Peters
 License: MIT License
 Version: 1.0.0
 
-This module provides functions for multiphase reactor modeling
+This module provides functions for multiphase reactor modeling.
+
+Functions:
+
+- construct_grad(axis, sz, x_c, x_f, bc): Construct the gradient matrix.
+- construct_div(axis, sz, x_f, nu): Construct the divergence matrix based on the given parameters.
+- construct_convflux_upwind(axis, sz, x_c, x_f, bc, v): Construct the convective flux matrix based on the given parameters.
+- numjac_local(axis, f, c, eps_jac=1e-6): Compute the local numerical Jacobian matrix and function values for the given function and initial values.
+- interp_stagg_to_cntr(axis, c_f, x_c, x_f): Interpolate values at staggered positions to cell-centers using linear interpolation.
+- non_uniform_grid(x_L, x_R, n, dx_inf, factor): Generate a non-uniform grid of points in the interval [x_L, x_R].
+- unwrap_bc(sz, bc): Unwrap the boundary conditions for a given size.
 
 Usage:
-- Function1: Perform operation X on input data.
-- Function2: Perform operation Y on input data.
+1. Use `construct_grad` to construct the gradient matrix.
+2. Use `construct_div` to construct the Div matrix based on the given parameters.
+3. Use `construct_convflux_upwind` to construct the Conv and conv_bc matrices based on the given parameters.
+4. Use `numjac_local` to compute the local numerical Jacobian matrix and function values for the given function and initial values.
+5. Use `interp_stagg_to_cntr` to interpolate values at staggered positions to cell-centers using linear interpolation.
+6. Use `non_uniform_grid` to generate a non-uniform grid of points in the interval [x_L, x_R].
+7. Use `unwrap_bc` to unwrap the boundary conditions for a given size. Mostly used by other functions
 
 """
-
 
 import numpy as np
 from scipy.sparse import csc_array
 import math
 
 
-def unwrap_bc(sz, bc):
+def construct_grad(axis, sz, x_c, x_f, bc):
     """
-    Unwrap the boundary conditions for a given size.
+    Construct the gradient matrix.
 
     Args:
+        axis (int): Dimension to construct the gradient matrix for.
         sz (tuple): Size of the domain.
+        x_c (ndarray): Cell center coordinates.
+        x_f (ndarray): Face coordinates.
         bc (dict): Boundary conditions.
 
     Returns:
-        tuple: Unwrapped boundary conditions (a, b, d).
+        csr_array: Gradient matrix (Grad).
+        csc_array: Contribtion of the inhomogeneous BC to the gradient (grad_bc).
     """
-    a = [None, None]
-    a[0] = np.array(bc['a'][0])
-    a[0] = a[0][(..., *([np.newaxis]*(len(sz)-a[0].ndim)))]
-    a[1] = np.array(bc['a'][1])
-    a[1] = a[1][(..., *([np.newaxis]*(len(sz)-a[1].ndim)))]
-    b = [None, None]
-    b[0] = np.array(bc['b'][0])
-    b[0] = b[0][(..., *([np.newaxis]*(len(sz)-b[0].ndim)))]
-    b[1] = np.array(bc['b'][1])
-    b[1] = b[1][(..., *([np.newaxis]*(len(sz)-b[1].ndim)))]
-    d = [None, None]
-    d[0] = np.array(bc['d'][0])
-    d[0] = d[0][(..., *([np.newaxis]*(len(sz)-d[0].ndim)))]
-    d[1] = np.array(bc['d'][1])
-    d[1] = d[1][(..., *([np.newaxis]*(len(sz)-d[1].ndim)))]
-    return a, b, d
+    # Trick: Reshape sizes to triplet sz_t
+    sz_t = [math.prod(sz[0:axis]), math.prod(
+        sz[axis:axis+1]), math.prod(sz[axis+1:])]
+
+    # Create face arrays
+    sz_f = list(sz)
+    sz_f[axis] = sz_f[axis] + 1
+    sz_f_t = list(sz_t.copy())
+    sz_f_t[1] = sz_t[1] + 1
+
+    # Create boundary quantity sizes
+    sz_bc = list(sz)
+    sz_bc[axis] = 1
+    sz_bc_d = [sz_t[0], sz_t[2]]
+
+    a, b, d = unwrap_bc(sz, bc)
+
+    # Handle special case with one cell in the dimension axis
+    if sz_t[1] == 1:
+        i_c = sz_t[2] * np.arange(sz_t[0]).reshape((-1, 1, 1)) + np.array(
+            (0, 0)).reshape((1, -1, 1)) + np.arange(sz_t[2]).reshape((1, 1, -1))
+        values = np.zeros(sz_f_t)
+        alpha_1 = (x_f[1] - x_f[0]) / ((x_c[0] - x_f[0]) * (x_f[1] - x_c[0]))
+        alpha_2L = (x_c[0] - x_f[0]) / ((x_f[1] - x_f[0]) * (x_f[1] - x_c[0]))
+        alpha_0L = alpha_1 - alpha_2L
+        alpha_2R = -(x_c[0] - x_f[1]) / ((x_f[0] - x_f[1]) * (x_f[0] - x_c[0]))
+        alpha_0R = alpha_1 - alpha_2R
+        fctr = 1 / ((b[0] + alpha_0L * a[0]) * (b[1] +
+                    alpha_0R * a[1]) - alpha_2L * alpha_2R * a[0] * a[1])
+        fctr[~np.isfinite(fctr)] = 0
+        value = alpha_1 * \
+            b[0] * (a[1] * (alpha_0R - alpha_2L) + b[1]) * fctr + np.zeros(sz)
+        values[:, 0, :] = np.reshape(value, sz_bc_d)
+        value = alpha_1 * \
+            b[1] * (a[0] * (-alpha_0L + alpha_2R) - b[0]) * fctr + np.zeros(sz)
+        values[:, 1, :] = np.reshape(value, sz_bc_d)
+
+        i_f_bc = sz_f_t[1] * sz_f_t[2] * np.arange(sz_f_t[0]).reshape((-1, 1, 1)) + sz_f_t[2] * np.array(
+            [0, sz_f_t[1]-1]).reshape((1, -1, 1)) + np.arange(sz_f_t[2]).reshape((1, 1, -1))
+        values_bc = np.zeros((sz_t[0], 2, sz_t[2]))
+        value = ((a[1] * (-alpha_0L * alpha_0R + alpha_2L * alpha_2R) - alpha_0L *
+                 b[1]) * d[0] - alpha_2L * b[0] * d[1]) * fctr + np.zeros(sz_bc)
+        values_bc[:, 0, :] = np.reshape(value, sz_bc_d)
+        value = ((a[0] * (+alpha_0L * alpha_0R - alpha_2L * alpha_2R) + alpha_0R *
+                 b[0]) * d[1] + alpha_2R * b[1] * d[0]) * fctr + np.zeros(sz_bc)
+        values_bc[:, 1, :] = np.reshape(value, sz_bc_d)
+    else:
+        i_c = sz_t[1] * sz_t[2] * np.arange(sz_t[0]).reshape(-1, 1, 1, 1) + sz_t[2] * np.arange(sz_f_t[1]).reshape((
+            1, -1, 1, 1)) + np.arange(sz_t[2]).reshape((1, 1, -1, 1)) + np.array([-sz_t[2], 0]).reshape((1, 1, 1, -1))
+        # For the first and last (boundary) faces, the relevant cells are the two neighboring the boundary faces
+        i_c[:, 0, :, :] = i_c[:, 0, :, :] + sz_t[2]
+        i_c[:, -1, :, :] = i_c[:, -1, :, :] - sz_t[2]
+
+        i_f_bc = sz_f_t[1] * sz_f_t[2] * np.arange(sz_f_t[0]).reshape((-1, 1, 1)) + sz_f_t[2] * np.array(
+            [0, sz_f_t[1]-1]).reshape((1, -1, 1)) + np.arange(sz_f_t[2]).reshape((1, 1, -1))
+        values_bc = np.zeros((sz_t[0], 2, sz_t[2]))
+
+        values = np.zeros((sz_f_t[0], sz_f_t[1], sz_f_t[2], 2))
+        dx_inv = np.tile(
+            1 / (x_c[1:] - x_c[:-1]).reshape((1, -1, 1)), (sz_t[0], 1, sz_t[2]))
+        values[:, 1:-1, :, 0] = -dx_inv
+        values[:, 1:-1, :, 1] = dx_inv
+
+        alpha_1 = (x_c[1] - x_f[0]) / ((x_c[0] - x_f[0]) * (x_c[1] - x_c[0]))
+        alpha_2 = (x_c[0] - x_f[0]) / ((x_c[1] - x_f[0]) * (x_c[1] - x_c[0]))
+        alpha_0 = alpha_1 - alpha_2
+        b[0] = b[0] / alpha_0
+        fctr = 1 / (a[0] + b[0])
+        fctr[~np.isfinite(fctr)] = 0
+        b_fctr = b[0] * fctr
+        b_fctr = b_fctr + np.zeros(sz_bc)
+        b_fctr = np.reshape(b_fctr, sz_bc_d)
+        d_fctr = d[0] * fctr
+        d_fctr = d_fctr + np.zeros(sz_bc)
+        d_fctr = np.reshape(d_fctr, sz_bc_d)
+        values[:, 0, :, 0] = b_fctr * alpha_1
+        values[:, 0, :, 1] = -b_fctr * alpha_2
+        values_bc[:, 0, :] = -d_fctr
+
+        alpha_1 = -(x_c[-2] - x_f[-1]) / \
+            ((x_c[-1] - x_f[-1]) * (x_c[-2] - x_c[-1]))
+        alpha_2 = -(x_c[-1] - x_f[-1]) / \
+            ((x_c[-2] - x_f[-1]) * (x_c[-2] - x_c[-1]))
+        alpha_0 = alpha_1 - alpha_2
+        b[-1] = b[-1] / alpha_0
+        fctr = 1 / (a[-1] + b[-1])
+        fctr[~np.isfinite(fctr)] = 0
+        b_fctr = b[-1] * fctr
+        b_fctr = b_fctr + np.zeros(sz_bc)
+        b_fctr = np.reshape(b_fctr, sz_bc_d)
+        d_fctr = d[-1] * fctr
+        d_fctr = d_fctr + np.zeros(sz_bc)
+        d_fctr = np.reshape(d_fctr, sz_bc_d)
+        values[:, -1, :, 0] = b_fctr * alpha_2
+        values[:, -1, :, 1] = -b_fctr * alpha_1
+        values_bc[:, -1, :] = d_fctr
+
+    num_f = math.prod(sz_f_t);
+    i_f = np.repeat(np.arange(num_f),2)
+    Grad = csc_array((values.flatten(), (i_f, i_c.flatten())), 
+                      shape=(num_f, math.prod(sz_t)))
+    Grad.sort_indices()
+        
+    grad_bc = csc_array((values_bc.flatten(), i_f_bc.flatten(), [
+                         0, i_f_bc.size]), shape=(math.prod(sz_f_t), 1))
+
+    return Grad, grad_bc
+
 
 def construct_div(axis, sz, x_f, nu):
     """
@@ -277,129 +387,6 @@ def numjac_local(axis, f, c, eps_jac=1e-6):
         0, i.size + sz_t[1], sz_t[1])), shape=(np.prod(sz_t), np.prod(sz_t)))
     return Jac, f_value.reshape(sz)
 
-def construct_grad(axis, sz, x_c, x_f, bc):
-    """
-    Construct the gradient matrix.
-
-    Args:
-        axis (int): Dimension to construct the gradient matrix for.
-        sz (tuple): Size of the domain.
-        x_c (ndarray): Cell center coordinates.
-        x_f (ndarray): Face coordinates.
-        bc (dict): Boundary conditions.
-
-    Returns:
-        csr_array: Gradient matrix (Grad).
-        csc_array: Contribtion of the inhomogeneous BC to the gradient (grad_bc).
-    """
-    # Trick: Reshape sizes to triplet sz_t
-    sz_t = [math.prod(sz[0:axis]), math.prod(
-        sz[axis:axis+1]), math.prod(sz[axis+1:])]
-
-    # Create face arrays
-    sz_f = list(sz)
-    sz_f[axis] = sz_f[axis] + 1
-    sz_f_t = list(sz_t.copy())
-    sz_f_t[1] = sz_t[1] + 1
-
-    # Create boundary quantity sizes
-    sz_bc = list(sz)
-    sz_bc[axis] = 1
-    sz_bc_d = [sz_t[0], sz_t[2]]
-
-    a, b, d = unwrap_bc(sz, bc)
-
-    # Handle special case with one cell in the dimension axis
-    if sz_t[1] == 1:
-        i_c = sz_t[2] * np.arange(sz_t[0]).reshape((-1, 1, 1)) + np.array(
-            (0, 0)).reshape((1, -1, 1)) + np.arange(sz_t[2]).reshape((1, 1, -1))
-        values = np.zeros(sz_f_t)
-        alpha_1 = (x_f[1] - x_f[0]) / ((x_c[0] - x_f[0]) * (x_f[1] - x_c[0]))
-        alpha_2L = (x_c[0] - x_f[0]) / ((x_f[1] - x_f[0]) * (x_f[1] - x_c[0]))
-        alpha_0L = alpha_1 - alpha_2L
-        alpha_2R = -(x_c[0] - x_f[1]) / ((x_f[0] - x_f[1]) * (x_f[0] - x_c[0]))
-        alpha_0R = alpha_1 - alpha_2R
-        fctr = 1 / ((b[0] + alpha_0L * a[0]) * (b[1] +
-                    alpha_0R * a[1]) - alpha_2L * alpha_2R * a[0] * a[1])
-        fctr[~np.isfinite(fctr)] = 0
-        value = alpha_1 * \
-            b[0] * (a[1] * (alpha_0R - alpha_2L) + b[1]) * fctr + np.zeros(sz)
-        values[:, 0, :] = np.reshape(value, sz_bc_d)
-        value = alpha_1 * \
-            b[1] * (a[0] * (-alpha_0L + alpha_2R) - b[0]) * fctr + np.zeros(sz)
-        values[:, 1, :] = np.reshape(value, sz_bc_d)
-
-        i_f_bc = sz_f_t[1] * sz_f_t[2] * np.arange(sz_f_t[0]).reshape((-1, 1, 1)) + sz_f_t[2] * np.array(
-            [0, sz_f_t[1]-1]).reshape((1, -1, 1)) + np.arange(sz_f_t[2]).reshape((1, 1, -1))
-        values_bc = np.zeros((sz_t[0], 2, sz_t[2]))
-        value = ((a[1] * (-alpha_0L * alpha_0R + alpha_2L * alpha_2R) - alpha_0L *
-                 b[1]) * d[0] - alpha_2L * b[0] * d[1]) * fctr + np.zeros(sz_bc)
-        values_bc[:, 0, :] = np.reshape(value, sz_bc_d)
-        value = ((a[0] * (+alpha_0L * alpha_0R - alpha_2L * alpha_2R) + alpha_0R *
-                 b[0]) * d[1] + alpha_2R * b[1] * d[0]) * fctr + np.zeros(sz_bc)
-        values_bc[:, 1, :] = np.reshape(value, sz_bc_d)
-    else:
-        i_c = sz_t[1] * sz_t[2] * np.arange(sz_t[0]).reshape(-1, 1, 1, 1) + sz_t[2] * np.arange(sz_f_t[1]).reshape((
-            1, -1, 1, 1)) + np.arange(sz_t[2]).reshape((1, 1, -1, 1)) + np.array([-sz_t[2], 0]).reshape((1, 1, 1, -1))
-        # For the first and last (boundary) faces, the relevant cells are the two neighboring the boundary faces
-        i_c[:, 0, :, :] = i_c[:, 0, :, :] + sz_t[2]
-        i_c[:, -1, :, :] = i_c[:, -1, :, :] - sz_t[2]
-
-        i_f_bc = sz_f_t[1] * sz_f_t[2] * np.arange(sz_f_t[0]).reshape((-1, 1, 1)) + sz_f_t[2] * np.array(
-            [0, sz_f_t[1]-1]).reshape((1, -1, 1)) + np.arange(sz_f_t[2]).reshape((1, 1, -1))
-        values_bc = np.zeros((sz_t[0], 2, sz_t[2]))
-
-        values = np.zeros((sz_f_t[0], sz_f_t[1], sz_f_t[2], 2))
-        dx_inv = np.tile(
-            1 / (x_c[1:] - x_c[:-1]).reshape((1, -1, 1)), (sz_t[0], 1, sz_t[2]))
-        values[:, 1:-1, :, 0] = -dx_inv
-        values[:, 1:-1, :, 1] = dx_inv
-
-        alpha_1 = (x_c[1] - x_f[0]) / ((x_c[0] - x_f[0]) * (x_c[1] - x_c[0]))
-        alpha_2 = (x_c[0] - x_f[0]) / ((x_c[1] - x_f[0]) * (x_c[1] - x_c[0]))
-        alpha_0 = alpha_1 - alpha_2
-        b[0] = b[0] / alpha_0
-        fctr = 1 / (a[0] + b[0])
-        fctr[~np.isfinite(fctr)] = 0
-        b_fctr = b[0] * fctr
-        b_fctr = b_fctr + np.zeros(sz_bc)
-        b_fctr = np.reshape(b_fctr, sz_bc_d)
-        d_fctr = d[0] * fctr
-        d_fctr = d_fctr + np.zeros(sz_bc)
-        d_fctr = np.reshape(d_fctr, sz_bc_d)
-        values[:, 0, :, 0] = b_fctr * alpha_1
-        values[:, 0, :, 1] = -b_fctr * alpha_2
-        values_bc[:, 0, :] = -d_fctr
-
-        alpha_1 = -(x_c[-2] - x_f[-1]) / \
-            ((x_c[-1] - x_f[-1]) * (x_c[-2] - x_c[-1]))
-        alpha_2 = -(x_c[-1] - x_f[-1]) / \
-            ((x_c[-2] - x_f[-1]) * (x_c[-2] - x_c[-1]))
-        alpha_0 = alpha_1 - alpha_2
-        b[-1] = b[-1] / alpha_0
-        fctr = 1 / (a[-1] + b[-1])
-        fctr[~np.isfinite(fctr)] = 0
-        b_fctr = b[-1] * fctr
-        b_fctr = b_fctr + np.zeros(sz_bc)
-        b_fctr = np.reshape(b_fctr, sz_bc_d)
-        d_fctr = d[-1] * fctr
-        d_fctr = d_fctr + np.zeros(sz_bc)
-        d_fctr = np.reshape(d_fctr, sz_bc_d)
-        values[:, -1, :, 0] = b_fctr * alpha_2
-        values[:, -1, :, 1] = -b_fctr * alpha_1
-        values_bc[:, -1, :] = d_fctr
-
-    num_f = math.prod(sz_f_t);
-    i_f = np.repeat(np.arange(num_f),2)
-    Grad = csc_array((values.flatten(), (i_f, i_c.flatten())), 
-                      shape=(num_f, math.prod(sz_t)))
-    Grad.sort_indices()
-        
-    grad_bc = csc_array((values_bc.flatten(), i_f_bc.flatten(), [
-                         0, i_f_bc.size]), shape=(math.prod(sz_f_t), 1))
-
-    return Grad, grad_bc
-
 
 def interp_stagg_to_cntr(axis, c_f, x_c, x_f):
     """
@@ -428,3 +415,56 @@ def interp_stagg_to_cntr(axis, c_f, x_c, x_f):
     c_c = c_c.reshape(sz)
 
     return c_c
+
+
+def non_uniform_grid(x_L, x_R, n, dx_inf, factor):
+    """
+    Generate a non-uniform grid of points in the interval [x_L, x_R]
+    With factor > 1 the refinement will be at the left wall, 
+    with 1/factor you will get the same refinement at the right wall.
+    
+    Parameters:
+        x_L (float): Start point of the interval.
+        x_R (float): End point of the interval.
+        n (int): Total number of points in the grid (excluding x1 and x2).
+        dx_inf (float): Limiting grid spacing.
+        factor (float): Factor used to increase grid spacing.
+
+    Returns:
+        numpy.ndarray: Array containing the non-uniform grid points.
+    """
+    a = np.log(factor)
+    unif = np.arange(n)
+    b = np.exp(-a * unif)
+    L = x_R - x_L
+    c = (np.exp(a * (L / dx_inf - n + 1.0)) - b[-1]) / (1 - b[-1])
+    x_f = x_L + unif * dx_inf + np.log((1 - c) * b + c) * (dx_inf / a)
+    return x_f
+
+def unwrap_bc(sz, bc):
+    """
+    Unwrap the boundary conditions for a given size.
+
+    Args:
+        sz (tuple): Size of the domain.
+        bc (dict): Boundary conditions.
+
+    Returns:
+        tuple: Unwrapped boundary conditions (a, b, d).
+    """
+    a = [None, None]
+    a[0] = np.array(bc['a'][0])
+    a[0] = a[0][(..., *([np.newaxis]*(len(sz)-a[0].ndim)))]
+    a[1] = np.array(bc['a'][1])
+    a[1] = a[1][(..., *([np.newaxis]*(len(sz)-a[1].ndim)))]
+    b = [None, None]
+    b[0] = np.array(bc['b'][0])
+    b[0] = b[0][(..., *([np.newaxis]*(len(sz)-b[0].ndim)))]
+    b[1] = np.array(bc['b'][1])
+    b[1] = b[1][(..., *([np.newaxis]*(len(sz)-b[1].ndim)))]
+    d = [None, None]
+    d[0] = np.array(bc['d'][0])
+    d[0] = d[0][(..., *([np.newaxis]*(len(sz)-d[0].ndim)))]
+    d[1] = np.array(bc['d'][1])
+    d[1] = d[1][(..., *([np.newaxis]*(len(sz)-d[1].ndim)))]
+    return a, b, d
