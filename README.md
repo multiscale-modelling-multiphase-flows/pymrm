@@ -18,7 +18,7 @@ To get a comprehensive understanding of PyMRM's capabilities, we recommend explo
 
 ### How to Install
 
-pip install py_mrm
+pip install py-mrm
 
 ### Quickstart Guide
 
