@@ -529,6 +529,24 @@ def construct_coefficient_matrix(coeffs, shape=None):
         Coeff = csc_array(diags(coeffs_loc.flatten(), format='csc_array'))
     return Coeff
 
+def numjac_loc_perturb(f, c, eps_jac=1e-6, axis=-1):
+    shape = c.shape
+    if (axis<0):
+        axis += len(shape)
+    shape_t = [math.prod(shape[0:axis]), shape[axis], math.prod(shape[axis+1:len(shape)])]
+    values = np.zeros((*shape_t, shape[axis]))
+    f_value = f(c).reshape(shape_t)
+    c = c.reshape(shape_t)
+    dc = -eps_jac * np.abs(c)  # relative deviation
+    dc[dc > (-eps_jac)] = eps_jac  # If dc is small use absolute deviation
+    dc = (c + dc) - c
+    c_perturb = np.copy(c)
+    for k in range(shape_t[1]):
+        c_perturb[:, k, :] += dc[:, k, :]
+        f_perturb = f(c_perturb.reshape(shape)).reshape(shape_t)
+        values[:, k, :, :] = np.transpose((f_perturb - f_value) / dc[:, [k], :],(0,2,1))
+    return values, f_value.reshape(shape), shape_t
+
 def numjac_local(f, c, eps_jac=1e-6, axis=-1):
     """
     Compute the local numerical Jacobian matrix and function values for the given function and initial values.
@@ -550,26 +568,12 @@ def numjac_local(f, c, eps_jac=1e-6, axis=-1):
         ndarray: The function values.
 
     """
-    shape = c.shape
-    if (axis<0):
-        axis += len(shape)
-    shape_t = [math.prod(shape[0:axis]), shape[axis], math.prod(shape[axis+1:len(shape)])]
-    values = np.zeros((*shape_t, shape[axis]))
+    values, f_value, shape_t = numjac_loc_perturb(f, c, eps_jac, axis)
     i = shape_t[1] * shape_t[2] * np.arange(shape_t[0]).reshape((-1, 1, 1, 1)) + np.zeros((1, shape_t[1], 1, 1)) + np.arange(
     shape_t[2]).reshape((1, 1, -1, 1)) + shape_t[2] * np.arange(shape_t[1]).reshape((1, 1, 1, -1))
-    f_value = f(c).reshape(shape_t)
-    c = c.reshape(shape_t)
-    dc = -eps_jac * np.abs(c)  # relative deviation
-    dc[dc > (-eps_jac)] = eps_jac  # If dc is small use absolute deviation
-    dc = (c + dc) - c
-    for k in range(shape_t[1]):
-        c_perturb = np.copy(c)
-        c_perturb[:, k, :] = c_perturb[:, k, :] + dc[:, k, :]
-        f_perturb = f(c_perturb.reshape(shape)).reshape(shape_t)
-        values[:, k, :, :] = np.transpose((f_perturb - f_value) / dc[:, [k], :],(0,2,1))
     Jac = csc_array((values.flatten(), i.flatten(), np.arange(
         0, i.size + shape_t[1], shape_t[1])), shape=(np.prod(shape_t), np.prod(shape_t)))
-    return Jac, f_value.reshape(shape)
+    return Jac, f_value
 
 def interp_stagg_to_cntr(c_f, x_f, x_c = None, axis = 0):
     """
