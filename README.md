@@ -2,9 +2,7 @@
 
 ## Overview
 
-Welcome to PyMRM, a Python package designed for creating phenomenological models of multiphase reactors. Developed within the ambit of the Multiphase Reactor Modeling course at Eindhoven University of Technology, this package finds its roots in the Department of Chemical Engineering and Chemistry.
-
-PyMRM is the brainchild of Martin van Sint Annaland and Frank Peters. Originally implemented in Matlab, PyMRM stands today as a port to Python, signifying a step forward in accessibility and versatility.
+Welcome to PyMRM, a Python package designed for creating phenomenological models of multiphase reactors. Developed within the ambit of the Multiphase Reactor Modeling course at Eindhoven University of Technology, this package finds its roots in the Department of Chemical Engineering and Chemistry taught by Martin van Sint Annaland and Frank Peters. Originally implemented in Matlab, PyMRM stands today as a port to Python, signifying a step forward in accessibility and open access.
 
 ## Getting Started
 
@@ -22,7 +20,7 @@ pip install py-mrm
 
 ### Quickstart Guide
 
-Start implementing 1D reaction-diffusion equations, proceed to convection, different phases, mass transfer, etc.
+Start implementing 1D reaction-diffusion equations, proceed to convection, different phases, mass transfer, etc. The Python notebook: py_mrm_examples.ipynb provides examples that are useful to get you started.
 
 ### Contributing
 
