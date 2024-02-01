@@ -1,6 +1,7 @@
 """
 Module Name: py_mrm
-Author: E.A.J.F. Peters
+Author: E.A.J.F. Peters, M. Sint Annaland, M. Galanti
+Date: 17/01/2024
 License: MIT License
 Version: 1.2.0
 
@@ -16,6 +17,7 @@ Functions:
 - construct_convflux_upwind_int(shape, v=1.0, axis=0): Construct the convective flux matrix for internal faces
 - construct_convflux_upwind_bc(shape, x_f, x_c=None, bc=None, v=0, axis=0): Construct the convective flux matrix for boundary faces.
 - construct_coefficient_matrix(coeffs, shape=None): Construct a diagonal matrix with coefficients on its diagonal.
+- newton(g, c, tol=1e-6, itmax=100, solver='bicgstab', filter=True, **param): Performs a Newton-Raphson iteration to seek the root of A(c)*c = b(c).
 - numjac_local(f, c, eps_jac=1e-6, axis=0): Compute the local numerical Jacobian matrix and function values for the given function and initial values.
 - interp_stagg_to_cntr(c_f, x_f, x_c=None, axis=0): Interpolate values at staggered positions to cell-centers using linear interpolation.
 - interp_cntr_to_stagg(c_c, x_f, x_c=None, axis=0): Interpolate values at cell-centered positions to staggered positions using linear interpolation and extrapolation at the wall.
@@ -35,8 +37,10 @@ Note: Please refer to the function descriptions for more details on their argume
 """
 
 import numpy as np
-from scipy.sparse import csc_array, diags
+from scipy.sparse import csc_array, diags, linalg, block_diag
+from scipy.linalg import norm
 import math
+from matplotlib import pyplot as plt
 
 def construct_grad(shape, x_f, x_c=None, bc=None, axis=0):
     """
@@ -60,7 +64,9 @@ def construct_grad(shape, x_f, x_c=None, bc=None, axis=0):
     # then there can also be constant contribution, grad_bc   
     if (x_c is None):
         x_c = 0.5*(x_f[0:-1]+x_f[1:])
+    
     Grad = construct_grad_int(shape, x_f, x_c, axis)
+    
     if (bc is None):
         shape_f = shape.copy()
         if (axis<0):
@@ -111,8 +117,10 @@ def construct_grad_int(shape, x_f,  x_c=None, axis=0):
     # The linear index is: i_f[i,j,k,m] = 2*(shape_t[2]*((shape_t[1]+1)*j + k)) + m
     i_f = (shape_t[1]+1) * shape_t[2] * np.arange(shape_t[0]).reshape(-1, 1, 1, 1) + shape_t[2] * np.arange(shape_t[1]).reshape((
         1, -1, 1, 1)) + np.arange(shape_t[2]).reshape((1, 1, -1, 1)) + np.array([0, shape_t[2]]).reshape((1, 1, 1, -1))
+    
     if (x_c is None):
         x_c = 0.5*(x_f[:-1] + x_f[1:])
+    
     dx_inv = np.tile(
         1 / (x_c[1:] - x_c[:-1]).reshape((1, -1, 1)), (shape_t[0], 1, shape_t[2]))
     values = np.empty(i_f.shape)
@@ -244,6 +252,55 @@ def construct_grad_bc(shape, x_f, x_c=None, bc=None, axis=0):
     grad_bc = csc_array((values_bc.ravel(), i_f_bc.ravel(), [
                          0, i_f_bc.size]), shape=(math.prod(shape_f_t),1))
     return Grad, grad_bc
+
+def construct_diff_flux(shape, A_grad, b_grad, param, axis=0):
+    """
+    Computes the diffusion fluxes in sparse format
+    
+    Parameters
+    ----------  
+        axis (int, optional): Dimension to construct the gradient matrix for. Default is 0.
+        shape:  shape (tuple): shape of the domain.
+        A_grad: sparse matrix containing the homogeneous terms of the discretized gradient operator
+        b_grad: sparse vector containing the heterogeneous terms resulting from the boundary conditions
+        param:  a dictionary that should contain the key 'Diff' where the diffusion coefficients
+                are stored, that can be a constant, a diagonal vector of length Nc, or an Nc x Nc matrix
+    
+    Returns
+    -------
+        diff_flux = A_diff*phi + b_diff
+        A_diff: sparse matrix for the homogeneous part of the diffusion fluxes
+        b_diff: sparse column vector for the inhomogeneous contributions resulting from the boundary conditions
+    
+    Example
+    -------
+        The command to obtain the diffusion fluxes in the x-direction is:
+        A_diff_x, b_diff_x = diff_flux(shape, sz, A_grad, b_grad, axis=0, **param)
+        
+    created by: M. van Sint Annaland
+    modified by: M. Galanti
+    date: January 2024
+    """ 
+    
+    sf = np.asarray(shape)
+    sf[axis] += 1
+    nc = shape[-1]
+    ntotf = np.prod(sf[0:-1])
+
+    if isinstance(param['Diff'], float):
+        A_diff = -param['Diff']*A_grad
+        b_diff = -param['Diff']*b_grad
+    elif isinstance(param['Diff'][axis-1], float):
+        Diff = np.asarray(param['Diff'])*np.eye(nc)
+        Diff_mat_x = block_diag([Diff]*ntotf, format='csc')
+        A_diff = -Diff_mat_x @ A_grad
+        b_diff = -Diff_mat_x @ b_grad
+    else:
+        Diff_mat_x = block_diag([param['Diff']]*ntotf, format='csc')
+        A_diff = -Diff_mat_x @ A_grad
+        b_diff = -Diff_mat_x @ b_grad
+
+    return A_diff, b_diff
 
 def construct_div(shape, x_f, nu=0, axis=0):
     """
@@ -405,8 +462,7 @@ def construct_convflux_upwind_bc(shape, x_f, x_c=None, bc=None, v=1.0, axis=0):
         shape_f = list(shape)
     if (axis<0):
         axis += len(shape)
-    shape_t = [math.prod(shape_f[0:axis]), math.prod(
-        shape_f[axis:axis+1]), math.prod(shape_f[axis+1:])]
+    shape_t = [math.prod(shape_f[0:axis]), math.prod(shape_f[axis:axis+1]), math.prod(shape_f[axis+1:])]
     
     # Create face arrays  
     shape_f[axis] = shape_f[axis] + 1
@@ -529,24 +585,6 @@ def construct_coefficient_matrix(coeffs, shape=None):
         Coeff = csc_array(diags(coeffs_loc.flatten(), format='csc_array'))
     return Coeff
 
-def numjac_loc_perturb(f, c, eps_jac=1e-6, axis=-1):
-    shape = c.shape
-    if (axis<0):
-        axis += len(shape)
-    shape_t = [math.prod(shape[0:axis]), shape[axis], math.prod(shape[axis+1:len(shape)])]
-    values = np.zeros((*shape_t, shape[axis]))
-    f_value = f(c).reshape(shape_t)
-    c = c.reshape(shape_t)
-    dc = -eps_jac * np.abs(c)  # relative deviation
-    dc[dc > (-eps_jac)] = eps_jac  # If dc is small use absolute deviation
-    dc = (c + dc) - c
-    c_perturb = np.copy(c)
-    for k in range(shape_t[1]):
-        c_perturb[:, k, :] += dc[:, k, :]
-        f_perturb = f(c_perturb.reshape(shape)).reshape(shape_t)
-        values[:, k, :, :] = np.transpose((f_perturb - f_value) / dc[:, [k], :],(0,2,1))
-    return values, f_value.reshape(shape), shape_t
-
 def numjac_local(f, c, eps_jac=1e-6, axis=-1):
     """
     Compute the local numerical Jacobian matrix and function values for the given function and initial values.
@@ -568,12 +606,123 @@ def numjac_local(f, c, eps_jac=1e-6, axis=-1):
         ndarray: The function values.
 
     """
-    values, f_value, shape_t = numjac_loc_perturb(f, c, eps_jac, axis)
+    shape = c.shape
+    if (axis<0):
+        axis += len(shape)
+    shape_t = [math.prod(shape[0:axis]), shape[axis], math.prod(shape[axis+1:len(shape)])]  # [Nx*Ny*Nz, Nc, ???]
+    values = np.zeros((*shape_t, shape[axis]))
     i = shape_t[1] * shape_t[2] * np.arange(shape_t[0]).reshape((-1, 1, 1, 1)) + np.zeros((1, shape_t[1], 1, 1)) + np.arange(
     shape_t[2]).reshape((1, 1, -1, 1)) + shape_t[2] * np.arange(shape_t[1]).reshape((1, 1, 1, -1))
+    f_value = f(c,).reshape(shape_t)
+    c = c.reshape(shape_t)
+    dc = -eps_jac * np.abs(c)  # relative deviation
+    dc[dc > (-eps_jac)] = eps_jac  # If dc is small use absolute deviation
+    dc = (c + dc) - c
+    for k in range(shape_t[1]):
+        c_perturb = np.copy(c)
+        c_perturb[:, k, :] = c_perturb[:, k, :] + dc[:, k, :]
+        f_perturb = f(c_perturb.reshape(shape)).reshape(shape_t)
+        values[:, k, :, :] = np.transpose((f_perturb - f_value) / dc[:, [k], :],(0,2,1))
     Jac = csc_array((values.flatten(), i.flatten(), np.arange(
         0, i.size + shape_t[1], shape_t[1])), shape=(np.prod(shape_t), np.prod(shape_t)))
-    return Jac, f_value
+    return Jac, f_value.reshape(shape)
+
+def newton(g, c, tol=1e-6, itmax=100, solver='bicgstab', filter=True, **param):
+  """
+  Performs a Newton-Raphson iteration to seek the root of A(c)*c = b(c), 
+  where A and b are a sparse matrix and sparse vector respectively, 
+  and both are to be provided by the function g(c, **param)
+
+  Parameters
+  ---------- 
+    g : `function g(c, **param)`
+      function that provides the linearized system in terms of sparse A matrix and sparse b vector
+    c : `numpy.ndarray`
+      vector containing the initial guesses for the values of c
+    tol : `float`, optional 
+      tolerance used for convergence in the Newton-Raphson iteration, default = 1e-6
+    itmax : `int`, optional
+      maximum number of iterations used in Newton-Raphson procedure, default = 100
+    solver : `str`, optional 
+      the method to solve the linearized equations, default = 'bicgstab'
+      options available: 'lu', 'cg', 'bicgstab'. For small systems (say Nc*Nx*Ny*Nz<50000) the 
+      direct 'lu' is preferred, while for bigger systems 'bicgstab' should be used (because of 
+      the asymmetric A matrices that typically arise); Use 'cg' only for symmetric A matrices.
+    **param : `keyword arguments`
+      Additional keyword arguments required in the computation of the linearized pde equations
+
+  Returns
+  ------- 
+    c : `numpy.ndarray`      
+      values c of the numerical approximation of the root of f(c) = 0
+    it : `int`
+      number of iterations used
+    defect : `float`
+      maximum norm of the defect in f
+
+  Example
+  -------
+    c, it, defect = numjac_src(lambda c: f(c, param), lambda c: jac(c, param), c)  
+
+  created by: M. van Sint Annaland, M. Galanti
+  date: January 2024
+  """
+
+  converged = False
+  it = 0
+  while (not converged) and (it<itmax):
+    it += 1
+    A, b = g(c, **param)
+
+    nriter = 0    
+    def iterations(xk): 
+      nonlocal nriter 
+      nriter += 1
+
+    match solver:
+      case 'lu': 
+        dc = linalg.spsolve(A, b)
+      case 'cg': 
+        n = np.prod(c.shape)
+        A_iLU = linalg.spilu(A)     # determine pre-conditioner M via ILU factorization
+        M = linalg.LinearOperator((n,n), A_iLU.solve)
+        dc, info = linalg.cg(A, b, np.zeros(n), tol=1e-9, maxiter=1000, M=M, callback=iterations)
+        if info!=0:
+          print('solution via cg unsuccessful! info = %d' % info)
+      case 'bicgstab':
+        n = np.prod(c.shape)
+        A_iLU = linalg.spilu(A)     # determine pre-conditioner M via ILU factorization
+        M = linalg.LinearOperator((n,n), A_iLU.solve)
+        dc, info = linalg.bicgstab(A, b, np.zeros(n), tol=1e-9, maxiter=10, M=M, callback=iterations)
+        if info!=0:
+          print('solution via bicgstab unsuccessful! info = %d' % info)
+
+    c += dc.reshape(c.shape)
+    defect = norm(dc, ord=np.inf)
+    converged = defect<tol
+
+    if filter:
+      # filter data with cmin and/or cmax with an approach factor
+      if 'Nc' in param:
+        factor = 0
+        if 'filter_factor' in param:
+          factor = param['filter_factor']
+        if 'filter_min' in param:
+          cmin = param['filter_min']
+          for i in range(param['Nc']):
+            indx = c[:,i] < cmin[i]
+            if any(indx):
+              c[indx, i] = cmin[i] + factor*abs(c[indx,i] - cmin[i])
+        if 'filter_max' in param:
+          cmax = param['filter_max']
+          for i in range(param['Nc']):
+            indx = c[:,i] > cmax[i]
+            if any(indx):
+              c[indx, i] = cmax[i] - factor*abs(cmax[i] - c[indx, i])
+
+    print(f"newton, it: {it:3d}, max. norm: {defect}")
+    
+  return c, it, defect
 
 def interp_stagg_to_cntr(c_f, x_f, x_c = None, axis = 0):
     """
@@ -662,6 +811,10 @@ def interp_cntr_to_stagg_tvd(c_c, x_f, x_c=None, bc=None, v=0, tvd_limiter = Non
     shape_f[axis] = shape[axis] + 1
     shape_f_t = shape_t.copy()
     shape_f_t[1] = shape_f[axis]
+    shape_bc = shape_f.copy()
+    shape_bc[axis] = 1
+    shape_bc_d = [shape_t[0], shape_t[2]]
+    
     if (x_c is None):
         x_c = 0.5*(x_f[:-1]+x_f[1:])
     c_c = c_c.reshape(shape_t)
@@ -678,12 +831,24 @@ def interp_cntr_to_stagg_tvd(c_c, x_f, x_c=None, bc=None, v=0, tvd_limiter = Non
         fctr = ((b[0] + alpha_0L * a[0]) * (b[1] +
                      alpha_0R * a[1]) - alpha_2L * alpha_2R * a[0] * a[1])
         np.divide(1, fctr, out=fctr, where=(fctr != 0))
-        c_f[:,0,:] = (alpha_1 * a[0] * (a[1] * (alpha_0R - alpha_2L) + b[1])
-                           * fctr)*c_c;
-        c_f[:, 1, :] = (alpha_1 * a[1] * (a[0] * (alpha_0L - alpha_2R) + b[0])
-                           * fctr)*c_c     
-        c_f[:, 0, :] += ((a[1] * alpha_0R + b[1]) * d[0] - alpha_2L * a[0] * d[1])* fctr
-        c_f[:, 0, :] += ((a[0] * alpha_0L + b[0]) * d[1] - alpha_2R * a[1] * d[0])* fctr
+        fctr_m = (alpha_1 * a[0] * (a[1] * (alpha_0R - alpha_2L) + b[1])
+                           * fctr) 
+        fctr_m = fctr_m + np.zeros(shape_bc)
+        fctr_m = np.reshape(fctr_m, shape_bc_d)
+        c_f[:,0,:] = fctr_m*c_c;
+        fctr_m = (alpha_1 * a[1] * (a[0] * (alpha_0L - alpha_2R) + b[0])
+                           * fctr)
+        fctr_m = fctr_m + np.zeros(shape_bc)
+        fctr_m = np.reshape(fctr_m, shape_bc_d)      
+        c_f[:, 1, :] = fctr_m*c_c
+        fctr_m = ((a[1] * alpha_0R + b[1]) * d[0] - alpha_2L * a[0] * d[1])* fctr
+        fctr_m = fctr_m + np.zeros(shape_bc)
+        fctr_m = np.reshape(fctr_m, shape_bc_d)     
+        c_f[:, 0, :] += fctr_m
+        fctr_m = ((a[0] * alpha_0L + b[0]) * d[1] - alpha_2R * a[1] * d[0])* fctr
+        fctr_m = fctr_m + np.zeros(shape_bc)
+        fctr_m = np.reshape(fctr_m, shape_bc_d) 
+        c_f[:, 0, :] += fctr_m
         c_f.reshape(shape_f)
         dc_f = np.zeros(shape_f)
     else:
@@ -694,15 +859,25 @@ def interp_cntr_to_stagg_tvd(c_c, x_f, x_c=None, bc=None, v=0, tvd_limiter = Non
         fctr = (alpha_0 * a[0] + b[0])
         np.divide(1, fctr, out=fctr, where=(fctr != 0))
         a_fctr = a[0] * fctr
+        a_fctr = a_fctr + np.zeros(shape_bc)
+        a_fctr = np.reshape(a_fctr, shape_bc_d)
         d_fctr = d[0] * fctr
-        c_f[:,0,:] = fctr*(d[0] + a[0]*(alpha_1*c_c[:,0,:] - alpha_2*c_c[:,1,:]))
+        d_fctr = d_fctr + np.zeros(shape_bc)
+        d_fctr = np.reshape(d_fctr, shape_bc_d)
+        c_f[:,0,:] = (d_fctr + a_fctr*(alpha_1*c_c[:,0,:] - alpha_2*c_c[:,1,:]))
         # bc 1
         alpha_1 = -(x_c[-2] - x_f[-1]) / ((x_c[-1] - x_f[-1]) * (x_c[-2] - x_c[-1]))
         alpha_2 = -(x_c[-1] - x_f[-1]) / ((x_c[-2] - x_f[-1]) * (x_c[-2] - x_c[-1]))
         alpha_0 = alpha_1 - alpha_2
         fctr = (alpha_0 * a[-1] + b[-1])
         np.divide(1, fctr, out=fctr, where=(fctr != 0))
-        c_f[:,-1,:] = fctr*(d[-1] + a[-1]*(alpha_1*c_c[:,-1,:] - alpha_2*c_c[:,-2,:]))
+        a_fctr = a[-1] * fctr
+        a_fctr = a_fctr + np.zeros(shape_bc)
+        a_fctr = np.reshape(a_fctr, shape_bc_d)
+        d_fctr = d[-1] * fctr
+        d_fctr = d_fctr + np.zeros(shape_bc)
+        d_fctr = np.reshape(d_fctr, shape_bc_d)
+        c_f[:,-1,:] = (d_fctr + a_fctr*(alpha_1*c_c[:,-1,:] - alpha_2*c_c[:,-2,:]))
         
         v = np.array(v) + np.zeros(shape_f)
         v = v.reshape(shape_f_t)
