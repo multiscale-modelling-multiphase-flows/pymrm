@@ -1,9 +1,9 @@
 """
-Module Name: py_mrm
-Author: E.A.J.F. Peters, M. Sint Annaland, M. Galanti
-Date: 17/01/2024
+Module Name: pymrm
+Author: E.A.J.F. Peters, M. Sint Annaland, M. Galanti, D. Rieder
+Date: 17/04/2024
 License: MIT License
-Version: 1.2.0
+Version: 1.3.0
 
 This module provides functions for multiphase reactor modeling.
 
@@ -17,8 +17,8 @@ Functions:
 - construct_convflux_upwind_int(shape, v=1.0, axis=0): Construct the convective flux matrix for internal faces
 - construct_convflux_upwind_bc(shape, x_f, x_c=None, bc=None, v=0, axis=0): Construct the convective flux matrix for boundary faces.
 - construct_coefficient_matrix(coeffs, shape=None): Construct a diagonal matrix with coefficients on its diagonal.
-- newton(g, c, tol=1e-6, itmax=100, solver='bicgstab', filter=True, **param): Performs a Newton-Raphson iteration to seek the root of A(c)*c = b(c).
 - numjac_local(f, c, eps_jac=1e-6, axis=0): Compute the local numerical Jacobian matrix and function values for the given function and initial values.
+- newton(g, c, tol=1e-6, itmax=100, solver='bicgstab', filter=True, **param): Performs a Newton-Raphson iteration to seek the root of A(c)*c = b(c).
 - interp_stagg_to_cntr(c_f, x_f, x_c=None, axis=0): Interpolate values at staggered positions to cell-centers using linear interpolation.
 - interp_cntr_to_stagg(c_c, x_f, x_c=None, axis=0): Interpolate values at cell-centered positions to staggered positions using linear interpolation and extrapolation at the wall.
 - interp_cntr_to_stagg_tvd(c_c, x_f, x_c=None, bc=None, v=0, tvd_limiter=None, axis=0): Interpolate values at cell-centered positions to staggered positions using linear interpolation and extrapolation at the wall.
@@ -39,6 +39,7 @@ Note: Please refer to the function descriptions for more details on their argume
 import numpy as np
 from scipy.sparse import csc_array, diags, linalg, block_diag
 from scipy.linalg import norm
+from scipy.optimize import OptimizeResult
 import math
 from matplotlib import pyplot as plt
 
@@ -627,102 +628,120 @@ def numjac_local(f, c, eps_jac=1e-6, axis=-1):
         0, i.size + shape_t[1], shape_t[1])), shape=(np.prod(shape_t), np.prod(shape_t)))
     return f_value.reshape(shape), Jac
 
-def newton(g, c, tol=1e-6, itmax=100, solver='bicgstab', filter=True, **param):
-  """
-  Performs a Newton-Raphson iteration to seek the root of A(c)*c = b(c), 
-  where A and b are a sparse matrix and sparse vector respectively, 
-  and both are to be provided by the function g(c, **param)
+def newton(func, x0, args=(), tol=1.49012e-08, maxfev=100, solver=None, callback=None):
+    """
+    Performs a Newton-Raphson iterations to seek the root of the vector valued function func(x0)
 
-  Parameters
-  ---------- 
-    g : `function g(c, **param)`
-      function that provides the linearized system in terms of sparse A matrix and sparse b vector
-    c : `numpy.ndarray`
-      vector containing the initial guesses for the values of c
+    Parameters
+    ---------- 
+    func : callable `function func(x, *args)`
+        function that provides the vector valued function 'g' of which the roots are sought and, as second argument, its Jacobian
+    x0 : `numpy.ndarray`
+        vector containing the initial guesses for the values of x
+    args : `tuple`, extra arguments
+        Extra arguments passed to func
     tol : `float`, optional 
-      tolerance used for convergence in the Newton-Raphson iteration, default = 1e-6
-    itmax : `int`, optional
-      maximum number of iterations used in Newton-Raphson procedure, default = 100
+        tolerance used for convergence in the Newton-Raphson iteration, default = 1e-6
+    maxfev : `int`, optional
+        maximum number of iterations used in Newton-Raphson procedure, default = 100
     solver : `str`, optional 
-      the method to solve the linearized equations, default = 'bicgstab'
-      options available: 'lu', 'cg', 'bicgstab'. For small systems (say Nc*Nx*Ny*Nz<50000) the 
-      direct 'lu' is preferred, while for bigger systems 'bicgstab' should be used (because of 
-      the asymmetric A matrices that typically arise); Use 'cg' only for symmetric A matrices.
-    **param : `keyword arguments`
-      Additional keyword arguments required in the computation of the linearized pde equations
+        the method to solve the linearized equations, default = 'bicgstab'
+        options available: 'lu', 'cg', 'bicgstab'. For small systems (say Nc*Nx*Ny*Nz<50000) the 
+        direct 'lu' is preferred, while for bigger systems 'bicgstab' should be used (because of 
+        the asymmetric Jac matrices that typically arise); Use 'cg' only for symmetric Jac matrices.
+    callback: callable, optional
+        Optional callback function. It is called on every iteration as callback(x, f) where x is the current solution and f the corresponding residual.
+        Note that the callback can be used to change x if it is mutable, e.g. to bound the values.
 
-  Returns
-  ------- 
-    c : `numpy.ndarray`      
-      values c of the numerical approximation of the root of f(c) = 0
-    it : `int`
-      number of iterations used
-    defect : `float`
-      maximum norm of the defect in f
+    Returns
+    ------- 
+    sol : The solution represented as a OptimizeResult object. 
+    Important attributes are: x the solution array, success a Boolean flag indicating if the algorithm exited successfully and
+    nit the number of iterations used.
 
-  Example
-  -------
-    c, it, defect = numjac_src(lambda c: f(c, param), lambda c: jac(c, param), c)  
+    Example
+    -------
+    sol = newton(numjac_loc(lambda c: f(c, options)), c)
 
-  created by: M. van Sint Annaland, M. Galanti
-  date: January 2024
-  """
+    created by: M. van Sint Annaland, M. Galanti, E.A.J.F. Peters
+    date: April 2024
+    """
 
-  converged = False
-  it = 0
-  while (not converged) and (it<itmax):
-    it += 1
-    A, b = g(c, **param)
-
-    nriter = 0    
-    def iterations(xk): 
-      nonlocal nriter 
-      nriter += 1
-
+    n = x0.size
+    if (solver is None):
+        if (n<50000):
+            solver = 'spsolve'
+        else:
+            solver = 'bicgstab' 
     match solver:
-      case 'lu': 
-        dc = linalg.spsolve(A, b)
-      case 'cg': 
-        n = np.prod(c.shape)
-        A_iLU = linalg.spilu(A)     # determine pre-conditioner M via ILU factorization
-        M = linalg.LinearOperator((n,n), A_iLU.solve)
-        dc, info = linalg.cg(A, b, np.zeros(n), tol=1e-9, maxiter=1000, M=M, callback=iterations)
-        if info!=0:
-          print('solution via cg unsuccessful! info = %d' % info)
-      case 'bicgstab':
-        n = np.prod(c.shape)
-        A_iLU = linalg.spilu(A)     # determine pre-conditioner M via ILU factorization
-        M = linalg.LinearOperator((n,n), A_iLU.solve)
-        dc, info = linalg.bicgstab(A, b, np.zeros(n), tol=1e-9, maxiter=10, M=M, callback=iterations)
-        if info!=0:
-          print('solution via bicgstab unsuccessful! info = %d' % info)
+        case 'spsolve':
+            linsolver = linalg.spsolve
+        case 'lu':
+            def linsolver(Jac, g):
+                Jac_lu = linalg.splu(Jac)
+                dx_neg = Jac_lu.solve(g)
+                return dx_neg
+        case 'cg':
+            def linsolver(Jac, g): 
+                Jac_iLU = linalg.spilu(Jac)     # determine pre-conditioner M via ILU factorization
+                M = linalg.LinearOperator((n,n), Jac_iLU.solve)
+                dx_neg, info = linalg.cg(Jac, g, np.zeros(n), tol=1e-9, maxiter=1000, M=M)
+                if info!=0:
+                    print('solution via cg unsuccessful! info = %d' % info)
+                return dx_neg
+        case 'bicgstab':
+            def linsolver(Jac, g):
+                Jac_iLU = linalg.spilu(Jac)     # determine pre-conditioner M via ILU factorization
+                M = linalg.LinearOperator((n,n), Jac_iLU.solve)
+                dx_neg, info = linalg.bicgstab(Jac, g, np.zeros(n), tol=1e-9, maxiter=10, M=M)
+                if info!=0:
+                    print('solution via bicgstab unsuccessful! info = %d' % info)
+                return dx_neg
 
-    c += dc.reshape(c.shape)
-    defect = norm(dc, ord=np.inf)
-    converged = defect<tol
+    converged = False
+    it = 0
+    x = x0.copy()
+    while (not converged) and (it<maxfev):
+        it += 1
+        g, Jac = func(x, *args)
+        g = g.reshape((-1,1))
+        dx_neg = linsolver(Jac, g)
+        defect = norm(dx_neg[:], ord=np.inf)
+        x -= dx_neg.reshape(x.shape)
+        converged = (defect<tol)
+        if callback:
+            callback(x, g)
 
-    if filter:
-      # filter data with cmin and/or cmax with an approach factor
-      if 'Nc' in param:
-        factor = 0
-        if 'filter_factor' in param:
-          factor = param['filter_factor']
-        if 'filter_min' in param:
-          cmin = param['filter_min']
-          for i in range(param['Nc']):
-            indx = c[:,i] < cmin[i]
-            if any(indx):
-              c[indx, i] = cmin[i] + factor*abs(c[indx,i] - cmin[i])
-        if 'filter_max' in param:
-          cmax = param['filter_max']
-          for i in range(param['Nc']):
-            indx = c[:,i] > cmax[i]
-            if any(indx):
-              c[indx, i] = cmax[i] - factor*abs(cmax[i] - c[indx, i])
+    if (~converged):
+        message = f"Newton stopped after {it} iterations with max. norm {defect}."
+    else:
+        message = 'The solution converged'
 
-    print(f"newton, it: {it:3d}, max. norm: {defect}")
-    
-  return c, it, defect
+    result = OptimizeResult({
+        'x': x,
+        'success': converged,
+        'message': message,
+        'fun': g.reshape(x0.shape),
+        'jac': Jac,
+        'nit': it
+    })
+    return result
+
+def clip_approach(x, f, lower_bounds = 0, upper_bounds = None, factor = 0):
+    # filter x with lower and upper bounds using an approach factor
+    if (factor == 0):
+        np.clip(x, lower_bounds, upper_bounds, out = x)
+    else:
+        if (lower_bounds != None):
+            below_lower = (x < lower_bounds)
+            if (np.any(below_lower)):
+                broadcasted_lower_bounds = np.broadcast_to(lower_bounds, x.shape)
+                x[below_lower] = (1.0 + factor)*broadcasted_lower_bounds[below_lower] - factor*x[below_lower]
+        if (upper_bounds != None):
+            above_upper = (x > upper_bounds)
+            if (np.any(above_upper)):
+                broadcasted_upper_bounds = np.broadcast_to(upper_bounds, x.shape)
+                x[above_upper] = (1.0 + factor)*broadcasted_upper_bounds[above_upper] - factor*x[above_upper]
 
 def interp_stagg_to_cntr(c_f, x_f, x_c = None, axis = 0):
     """

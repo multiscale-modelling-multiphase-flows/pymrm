@@ -11,7 +11,8 @@ dependencies = [
 ]
 authors = [
     {name = "E.A.J.F. Peters", email = "e.a.j.f.peters@tue.nl"},
-    {name = "D.R. Rieder", email = "d.r.rieder@tue.nl"}
+    {name = "M. van Sint Annaland", email= "M.v.SintAnnaland@tue.nl"},
+    {name = "M. Galanti", email = "m.galanti@tue.nl"},
     {name = "D.R. Rieder", email = "d.r.rieder@tue.nl"}
 ]
 maintainers = [
