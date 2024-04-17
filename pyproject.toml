@@ -20,12 +20,12 @@ maintainers = [
 ]
 description = "Functions for multiphase reactor modeling"
 readme = "README.md"
-license = {file = "LICENSE"}
 keywords = ["MRM", "modeling", "multiphase", "diffusion", "convection"]
 requires-python = ">=3.8"
 classifiers = [
     "Development Status :: 4 - Beta",
-    "Programming Language :: Python"
+    "Programming Language :: Python",
+    "License :: OSI Approved :: MIT License"
 ]
 
 [project.urls]
