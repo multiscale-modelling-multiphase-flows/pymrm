@@ -20,7 +20,7 @@ pip install pymrm
 
 ### Quickstart Guide
 
-Start implementing 1D reaction-diffusion equations, proceed to convection, different phases, mass transfer, etc. The Python notebook: py_mrm_examples.ipynb provides examples that are useful to get you started.
+Start implementing 1D reaction-diffusion equations, proceed to convection, different phases, mass transfer, etc. The Python notebook: pymrm_examples.ipynb provides examples that are useful to get you started.
 
 ### Contributing
 
