@@ -625,7 +625,7 @@ def numjac_local(f, c, eps_jac=1e-6, axis=-1):
         values[:, k, :, :] = np.transpose((f_perturb - f_value) / dc[:, [k], :],(0,2,1))
     Jac = csc_array((values.flatten(), i.flatten(), np.arange(
         0, i.size + shape_t[1], shape_t[1])), shape=(np.prod(shape_t), np.prod(shape_t)))
-    return Jac, f_value.reshape(shape)
+    return f_value.reshape(shape), Jac
 
 def newton(g, c, tol=1e-6, itmax=100, solver='bicgstab', filter=True, **param):
   """
