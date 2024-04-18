@@ -672,31 +672,34 @@ def newton(func, x0, args=(), tol=1.49012e-08, maxfev=100, solver=None, callback
         if (n<50000):
             solver = 'spsolve'
         else:
-            solver = 'bicgstab' 
-    match solver:
-        case 'spsolve':
-            linsolver = linalg.spsolve
-        case 'lu':
-            def linsolver(Jac, g):
-                Jac_lu = linalg.splu(Jac)
-                dx_neg = Jac_lu.solve(g)
-                return dx_neg
-        case 'cg':
-            def linsolver(Jac, g): 
-                Jac_iLU = linalg.spilu(Jac)     # determine pre-conditioner M via ILU factorization
-                M = linalg.LinearOperator((n,n), Jac_iLU.solve)
-                dx_neg, info = linalg.cg(Jac, g, np.zeros(n), tol=1e-9, maxiter=1000, M=M)
-                if info!=0:
-                    print('solution via cg unsuccessful! info = %d' % info)
-                return dx_neg
-        case 'bicgstab':
-            def linsolver(Jac, g):
-                Jac_iLU = linalg.spilu(Jac)     # determine pre-conditioner M via ILU factorization
-                M = linalg.LinearOperator((n,n), Jac_iLU.solve)
-                dx_neg, info = linalg.bicgstab(Jac, g, np.zeros(n), tol=1e-9, maxiter=10, M=M)
-                if info!=0:
-                    print('solution via bicgstab unsuccessful! info = %d' % info)
-                return dx_neg
+            solver = 'bicgstab'
+            
+    if (solver == 'spsolve'):
+        linsolver = linalg.spsolve
+    elif (solver == 'lu'):
+        def linsolver(Jac, g):
+            Jac_lu = linalg.splu(Jac)
+            dx_neg = Jac_lu.solve(g)
+            return dx_neg
+    elif (solver == 'cg'):
+        def linsolver(Jac, g): 
+            Jac_iLU = linalg.spilu(Jac)     # determine pre-conditioner M via ILU factorization
+            M = linalg.LinearOperator((n,n), Jac_iLU.solve)
+            dx_neg, info = linalg.cg(Jac, g, np.zeros(n), tol=1e-9, maxiter=1000, M=M)
+            if info!=0:
+                print('solution via cg unsuccessful! info = %d' % info)
+            return dx_neg
+    elif (solver == 'bicgstab'):
+        def linsolver(Jac, g):
+            Jac_iLU = linalg.spilu(Jac)     # determine pre-conditioner M via ILU factorization
+            M = linalg.LinearOperator((n,n), Jac_iLU.solve)
+            dx_neg, info = linalg.bicgstab(Jac, g, np.zeros(n), tol=1e-9, maxiter=10, M=M)
+            if info!=0:
+                print('solution via bicgstab unsuccessful! info = %d' % info)
+            return dx_neg
+    else:
+        linsolver = None
+        print("No valid solver selected.")
 
     converged = False
     it = 0

@@ -17,12 +17,12 @@ sys.path.insert(0, os.path.abspath('.'))
 
 # -- Project information -----------------------------------------------------
 
-project = 'py_mrm'
-copyright = '2023, E.A.J.F. Peters'
+project = 'pymrm'
+copyright = '2024, E.A.J.F. Peters'
 author = 'E.A.J.F. Peters'
 
 # The full version, including alpha/beta/rc tags
-release = '1.2.0'
+release = '1.3.1'
 
 
 # -- General configuration ---------------------------------------------------
