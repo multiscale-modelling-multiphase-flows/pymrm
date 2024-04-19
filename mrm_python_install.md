@@ -32,6 +32,7 @@ If you prefer not to use Anaconda, you can set up your environment using Python'
 #### Step 1: Install Python
 1. Download Python from the [official Python website](https://www.python.org/downloads/).
 2. Follow the instructions to install Python on your system. 
+
 #### Step 2: Create and Activate a Virtual Environment
 1. Open your terminal or command prompt.
 2. Navigate to your project directory or where you want to place your virtual environment.
@@ -39,6 +40,7 @@ If you prefer not to use Anaconda, you can set up your environment using Python'
 Activate the virtual environment:
 On Windows: `mrm\Scripts\activate`
 On macOS/Linux: `source mrm/bin/activate`
+
 #### Step 3: Install Required Packages
 1. Ensure you are in the directory containing the mrm_requirements.txt file.
 2. Install the required packages using: `pip install -r mrm_requirements.txt`
