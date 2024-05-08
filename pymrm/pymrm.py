@@ -562,7 +562,7 @@ def construct_convflux_upwind_bc(shape, x_f, x_c=None, bc=None, v=1.0, axis=0):
                          0, i_f_bc.size]), shape=(math.prod(shape_f_t),1))
     return Conv, conv_bc
 
-def construct_coefficient_matrix(coeffs, shape=None):
+def construct_coefficient_matrix(coeffs, shape=None, axis=None):
     """
     Construct a diagional matrix with coefficients on its diagonal.
     This is useful to create a matrix containing transport coefficients 
@@ -571,18 +571,22 @@ def construct_coefficient_matrix(coeffs, shape=None):
     Args:
         coeffs (ndarray): values of the coefficients in a field
         shape (tuple, optional): Shape of the multidimensional field. With this option, some of the dimensions of coeffs can be choosen singleton.
+        axis: In case of broadcasting along 'axis' used shape will be shape[axis+1] (can be useful for face-values)
 
     Returns:
         csc_array: matrix Coeff with coefficients on its diagonal.
-        csc_array: The conv_bc matrix.
     """
     if(shape == None):
         shape = coeffs.shape
         Coeff = csc_array(diags(coeffs.flatten(), format='csc'))
     else:
-        reps = [shape[i] // coeffs.shape[i] if i < len(coeffs.shape) else shape[i] for i in range(len(shape))]
-        coeffs_loc = np.tile(coeffs, reps)
-        Coeff = csc_array(diags(coeffs_loc.flatten(), format='csc_array'))
+        shape = list(shape)
+        if (axis != None):
+            shape[axis] += 1
+        coeffs_copy = np.array(coeffs)
+        reps = [shape[i] // coeffs_copy.shape[i] if i < len(coeffs_copy.shape) else shape[i] for i in range(len(shape))]
+        coeffs_copy = np.tile(coeffs_copy, reps)
+        Coeff = csc_array(diags(coeffs_copy.flatten(), format='csc'))
     return Coeff
 
 def numjac_local(f, c, eps_jac=1e-6, axis=-1):
