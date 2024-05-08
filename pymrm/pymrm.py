@@ -569,9 +569,9 @@ def construct_coefficient_matrix(coeffs, shape=None, axis=None):
     from a field contained in a ndarray. 
 
     Args:
-        coeffs (ndarray): values of the coefficients in a field
+        coeffs (ndarray, list): values of the coefficients in a field
         shape (tuple, optional): Shape of the multidimensional field. With this option, some of the dimensions of coeffs can be choosen singleton.
-        axis: In case of broadcasting along 'axis' used shape will be shape[axis+1] (can be useful for face-values)
+        axis (int, optional): In case of broadcasting along 'axis' used shape will be shape[axis+1] (can be useful for face-values)
 
     Returns:
         csc_array: matrix Coeff with coefficients on its diagonal.
