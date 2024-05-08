@@ -5,4 +5,4 @@ pandas>=2.2
 matplotlib>=3.8
 ipython>=8.20
 ipykernel>=6.28
-pymrm>=1.3.1
+pymrm>=1.3.2
