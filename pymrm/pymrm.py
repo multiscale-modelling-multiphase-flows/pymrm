@@ -603,7 +603,7 @@ def numjac_local(f, c, eps_jac=1e-6, axis=-1):
         f (callable): The function for which to compute the Jacobian.
         c (ndarray): The value at which the Jacobian should be evaluated.
         eps_jac (float, optional): The perturbation value for computing the Jacobian. Defaults to 1e-6.
-        axis (int, optional): The axis along which components are coupled. Default is -1.
+        axis (int or tuple/list, optional): The axis or axes along which components are mutually coupled. Default is -1.
 
     Returns:
         csc_array: The Jacobian matrix.
@@ -611,10 +611,14 @@ def numjac_local(f, c, eps_jac=1e-6, axis=-1):
 
     """
     shape = c.shape
-    if (axis<0):
-        axis += len(shape)
-    shape_t = [math.prod(shape[0:axis]), shape[axis], math.prod(shape[axis+1:len(shape)])]  # [Nx*Ny*Nz, Nc, ???]
-    values = np.zeros((*shape_t, shape[axis]))
+    if isinstance(axis, int):
+        axis = (axis,)
+    axis = [a + len(shape) if a < 0 else a for a in axis]  # Normalize negative indices
+    # Calculate the shape tuple for the reshaping operation
+    middle_dim = math.prod([shape[a] for a in axis])
+    shape_t = [math.prod(shape[:min(axis)]), middle_dim, math.prod(shape[max(axis)+1:])]
+
+    values = np.zeros((*shape_t, shape_t[1]))
     i = shape_t[1] * shape_t[2] * np.arange(shape_t[0]).reshape((-1, 1, 1, 1)) + np.zeros((1, shape_t[1], 1, 1)) + np.arange(
     shape_t[2]).reshape((1, 1, -1, 1)) + shape_t[2] * np.arange(shape_t[1]).reshape((1, 1, 1, -1))
     f_value = f(c,).reshape(shape_t)
