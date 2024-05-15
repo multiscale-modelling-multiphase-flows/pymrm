@@ -505,8 +505,7 @@ def construct_convflux_upwind_bc(shape, x_f, x_c=None, bc=None, v=1.0, axis=0):
         values[:, 1, :] = ((alpha_1 * a[1] * (a[0] * (alpha_0L - alpha_2R) + b[0])
                            * fctr + np.zeros(shape)).reshape(shape_bc_d))
         values = values * v
-        Conv = csc_array((values.ravel(), i_c.ravel(), np.arange(
-            0, i_c.size + 1)), shape=(math.prod(shape_f_t), math.prod(shape_t)))        
+        Conv = csc_array((values.ravel(), (i_f.ravel(), i_c.ravel())), shape=(math.prod(shape_f_t), math.prod(shape_t)))        
         
         i_f_bc = shape_f_t[1] * shape_f_t[2] * np.arange(shape_f_t[0]).reshape((-1, 1, 1)) + shape_f_t[2] * np.array(
             [0, shape_f_t[1]-1]).reshape((1, -1, 1)) + np.arange(shape_f_t[2]).reshape((1, 1, -1))
@@ -940,7 +939,7 @@ def interp_cntr_to_stagg_tvd(c_c, x_f, x_c=None, bc=None, v=0, tvd_limiter = Non
             c_f += dc_f
             dc_f = dc_f.reshape(shape_f)
             c_f = c_f.reshape(shape_f)
-        return c_f, dc_f
+    return c_f, dc_f
 
 def upwind(c_norm_C, x_norm_C, x_norm_d):
     """
