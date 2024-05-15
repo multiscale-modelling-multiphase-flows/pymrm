@@ -176,6 +176,8 @@ def construct_grad_bc(shape, x_f, x_c=None, bc=None, axis=0):
             x_c = 0.5*(x_f[0:-1] + x_f[1:])
         i_c = shape_t[2] * np.arange(shape_t[0]).reshape((-1, 1, 1)) + np.array(
             (0, 0)).reshape((1, -1, 1)) + np.arange(shape_t[2]).reshape((1, 1, -1))
+        i_f = shape_t[2] * np.arange(shape_t[0]).reshape((-1, 1, 1)) + shape_t[2] * np.array([0,1]).reshape((
+            1, -1, 1)) + np.arange(shape_t[2]).reshape((1, 1, -1))
         values = np.zeros(shape_f_t)
         alpha_1 = (x_f[1] - x_f[0]) / ((x_c[0] - x_f[0]) * (x_f[1] - x_c[0]))
         alpha_2L = (x_c[0] - x_f[0]) / ((x_f[1] - x_f[0]) * (x_f[1] - x_c[0]))
@@ -486,6 +488,8 @@ def construct_convflux_upwind_bc(shape, x_f, x_c=None, bc=None, v=1.0, axis=0):
             x_c = 0.5*(x_f[0:-1] + x_f[1:])
         i_c = shape_t[2] * np.arange(shape_t[0]).reshape((-1, 1, 1)) + np.array(
             (0, 0)).reshape((1, -1, 1)) + np.arange(shape_t[2]).reshape((1, 1, -1))
+        i_f = shape_t[2] * np.arange(shape_t[0]).reshape((-1, 1, 1)) + shape_t[2] * np.array([0,1]).reshape((
+            1, -1, 1)) + np.arange(shape_t[2]).reshape((1, 1, -1))
         values = np.zeros(shape_f_t)
         alpha_1 = (x_f[1] - x_f[0]) / ((x_c[0] - x_f[0]) * (x_f[1] - x_c[0]))
         alpha_2L = (x_c[0] - x_f[0]) / ((x_f[1] - x_f[0]) * (x_f[1] - x_c[0]))
