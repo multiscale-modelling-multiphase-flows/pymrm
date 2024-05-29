@@ -867,12 +867,12 @@ def interp_cntr_to_stagg_tvd(c_c, x_f, x_c=None, bc=None, v=0, tvd_limiter = Non
                            * fctr) 
         fctr_m = fctr_m + np.zeros(shape_bc)
         fctr_m = np.reshape(fctr_m, shape_bc_d)
-        c_f[:,0,:] = fctr_m*c_c;
+        c_f[:,0,:] = fctr_m*c_c[:,0,:];
         fctr_m = (alpha_1 * a[1] * (a[0] * (alpha_0L - alpha_2R) + b[0])
                            * fctr)
         fctr_m = fctr_m + np.zeros(shape_bc)
         fctr_m = np.reshape(fctr_m, shape_bc_d)      
-        c_f[:, 1, :] = fctr_m*c_c
+        c_f[:, 1, :] = fctr_m*c_c[:,0,:]
         fctr_m = ((a[1] * alpha_0R + b[1]) * d[0] - alpha_2L * a[0] * d[1])* fctr
         fctr_m = fctr_m + np.zeros(shape_bc)
         fctr_m = np.reshape(fctr_m, shape_bc_d)     
@@ -880,7 +880,7 @@ def interp_cntr_to_stagg_tvd(c_c, x_f, x_c=None, bc=None, v=0, tvd_limiter = Non
         fctr_m = ((a[0] * alpha_0L + b[0]) * d[1] - alpha_2R * a[1] * d[0])* fctr
         fctr_m = fctr_m + np.zeros(shape_bc)
         fctr_m = np.reshape(fctr_m, shape_bc_d) 
-        c_f[:, 0, :] += fctr_m
+        c_f[:, 1, :] += fctr_m
         c_f.reshape(shape_f)
         dc_f = np.zeros(shape_f)
     else:
