@@ -811,11 +811,14 @@ def interp_cntr_to_stagg(c_c, x_f, x_c=None, axis=0):
         x_c = 0.5*(x_f[:-1]+x_f[1:])
     wght = (x_f[1:-1] - x_c[:-1]) / (x_c[1:] - x_c[:-1])
     c_c = c_c.reshape(shape_t)
-    c_f = np.empty(shape_f_t)
-    c_f[:,1:-1,:] = c_c[:, :-1, :] + wght.reshape((1,-1,1)) * (c_c[:, 1:, :] - c_c[:, :-1, :])
-    c_f[:,0,:] = (c_c[:,0,:]*(x_c[1]-x_f[0]) - c_c[:,1,:]*(x_c[0]-x_f[0]))/(x_c[1]-x_c[0])
-    c_f[:,-1,:] = (c_c[:,-1,:]*(x_f[-1]-x_c[-2]) - c_c[:,-2,:]*(x_f[-1]-x_c[-1]))/(x_c[-1]-x_c[-2])
-    c_f = c_f.reshape(shape_f)
+    if (shape_t[1]==1):
+        c_f = np.tile(c_c, (1,2,1))
+    else:
+        c_f = np.empty(shape_f_t)
+        c_f[:,1:-1,:] = c_c[:, :-1, :] + wght.reshape((1,-1,1)) * (c_c[:, 1:, :] - c_c[:, :-1, :])
+        c_f[:,0,:] = (c_c[:,0,:]*(x_c[1]-x_f[0]) - c_c[:,1,:]*(x_c[0]-x_f[0]))/(x_c[1]-x_c[0])
+        c_f[:,-1,:] = (c_c[:,-1,:]*(x_f[-1]-x_c[-2]) - c_c[:,-2,:]*(x_f[-1]-x_c[-1]))/(x_c[-1]-x_c[-2])
+        c_f = c_f.reshape(shape_f)
     return c_f
 
 def interp_cntr_to_stagg_tvd(c_c, x_f, x_c=None, bc=None, v=0, tvd_limiter = None, axis=0):
