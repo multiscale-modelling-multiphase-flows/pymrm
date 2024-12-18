@@ -80,7 +80,7 @@ For each of the entries the dependent indiced can next be further expanded.
 import numpy as np
 from scipy.sparse import csc_array, csr_array, lil_array, sparray
 from scipy.sparse.csgraph import reverse_cuthill_mckee
-from numba import njit, jit
+from numba import njit, prange
 import numpy as np
 from typing import List, Tuple, Union
 
@@ -443,29 +443,71 @@ def colgroup(*args, try_reorder=True):
             num_groups = num_groups2
     
     return g, num_groups
+
+def stencil_block_diagonals(ndims=1, axes_diagonals=[], axes_blocks=[-1], periodic_axes=[]):
+    if (ndims < len(axes_diagonals) or ndims < len(axes_blocks)):
+        raise ValueError("Number of dimensions should be greater than the number of axes.")
+    dependencies = []
+    dep_block = ndims*[0,]
+    for axis in axes_blocks:
+        dep_block[axis] = slice(None)
+    if len(axes_diagonals) == 0:
+        dep = (tuple(dep_block), tuple(dep_block), axes_blocks, periodic_axes)
+        dependencies.append(dep)
+    else:
+        for axis in axes_diagonals:
+            dep_diagonals = dep_block.copy()
+            dep_diagonals[axis] = [-1,0,1]
+            dep = (tuple(dep_block), tuple(dep_diagonals), axes_blocks, periodic_axes)
+            dependencies.append(dep)
+    return dependencies
+
+def precompute_perturbations(c, dc, num_gr, gr):
+    c_perturb = np.tile(c[np.newaxis, ...], (num_gr,) + (1,) * c.ndim)
+    c_perturb.ravel()[c.size * gr.ravel() + np.arange(c.size)] += dc.ravel()
+    return c_perturb
+
+@njit(parallel=True)
+def precompute_perturbations_numba(c, dc, num_gr, gr):
+    c_flat = c.ravel()
+    dc_flat = dc.ravel()
+    gr_flat = gr.ravel()
+    c_size = c_flat.size
+    
+    c_perturb_flat = np.empty((num_gr, c_size), dtype=c.dtype)
+    
+    for k in prange(num_gr):
+        for idx in range(c_size):
+            c_perturb_flat[k, idx] = c_flat[idx]
+    
+    for idx in prange(c_size):
+        c_perturb_flat[gr_flat[idx], idx] += dc_flat[idx]
+    
+    c_perturb = c_perturb_flat.reshape((num_gr,) + c.shape)
+    return c_perturb
+
+
+@njit(parallel=True)
+def compute_dfdc(f_value, perturbed_values, dc, num_gr):
+    dfdc = np.empty(perturbed_values.shape)
+    for k in prange(num_gr):
+        dfdc[k, ...] = (perturbed_values[k, ...] - f_value) / dc
+    return dfdc
 class NumJac:
-    def __init__(self, shape = None, stencil = None, eps_jac = 1e-6):
+    def __init__(self, shape = None, stencil = stencil_block_diagonals, eps_jac = 1e-6, *args, **kwargs):
         self.shape = shape
         self.eps_jac = eps_jac
-        self.init_stencil(stencil)
+        self.init_stencil(stencil, *args, **kwargs)
     
-    def init_stencil(self, stencil):
+    def init_stencil(self, stencil, *args, **kwargs):
         # Handle direct stencil, string keys, or callable stencils
         if stencil is None:
             raise ValueError("Stencil must be provided as a pattern, function, or predefined key.")
-
-        if isinstance(stencil, str):
-            # Use a predefined stencil
-            if stencil in stencils_registry:
-                stencil = stencils_registry[stencil](self.shape)
-            else:
-                raise ValueError(f"Unknown stencil key: {stencil}")
-
         elif callable(stencil):
             # Generate stencil dynamically
-            stencil = stencil(self.shape)
-        dependencies = expand_dependencies(self.shape, stencil)
-        self.rows, self.cols = generate_sparsity_pattern(self.shape, dependencies)
+            stencil = stencil(ndims=len(self.shape), *args, **kwargs)
+        self.dependencies = expand_dependencies(self.shape, stencil)
+        self.rows, self.cols = generate_sparsity_pattern(self.shape, self.dependencies)
         self.gr, self.num_gr = colgroup(self.rows, self.cols)
         
     def __call__(self, f, c):
@@ -473,11 +515,19 @@ class NumJac:
         dc = -self.eps_jac * np.abs(c)
         dc[dc > (-self.eps_jac)] = self.eps_jac
         dc = (c + dc) - c
+        
+        # Precompute perturbations using Numba
+        # c_perturb = precompute_perturbations_numba(c, dc, self.num_gr, self.gr)
         c_perturb = np.tile(c[np.newaxis, ...], (self.num_gr,) + (1,) * c.ndim)
-        c_perturb.ravel()[c.size*self.gr.ravel() + np.arange(c.size)] += dc.ravel()
-        dfdc = np.empty(c_perturb.shape)
-        for k in range(self.num_gr):
-            dfdc[k,...] = (f(c_perturb[k,...])-f_value) / dc
+        c_perturb.ravel()[c.size * self.gr.ravel() + np.arange(c.size)] += dc.ravel()
+    
+        # Evaluate function f on perturbed values
+        perturbed_values = np.array([f(c_perturb[k, ...]) for k in range(self.num_gr)])
+        
+        # Compute dfdc using Numba
+        dfdc = compute_dfdc(f_value, perturbed_values, dc, self.num_gr)
+        
         values = dfdc.reshape((self.num_gr, -1))[self.gr.ravel()[self.cols], self.rows]
-        jac = csc_array((values, (self.rows, self.cols)), shape = (f_value.size, c.size))
+        jac = csc_array((values, (self.rows, self.cols)), shape=(f_value.size, c.size))
+        
         return f_value, jac
