@@ -1,75 +1,80 @@
 """
-This module provides functionality for expanding dependencies and generating sparsity patterns for operations on multidimensional arrays.
+Universal Dependency Notation
+-----------------------------
 
-Notation for Sparsity Patterns:
---------------------------------
+This notation provides a consistent format for describing stencil dependencies, 
+block dependencies, and range-based dependencies on multidimensional arrays. 
+Each dependency is represented as a triple:
 
-The sparsity pattern notation allows you to specify dependencies between elements in a multidimensional array. The notation supports shorthand and full formats for specifying these dependencies.
+    (reference_index, dependent_index, fixed_axes_list, periodic_axes_list)
 
-1. **Basic Notation**:
-   - Dependencies can be defined using tuples, lists of tuples, or ranges.
-   - Each dependency is specified as a tuple, which can have different formats based on the type of dependency.
+- `reference_index`:
+  A tuple representing the reference position in the array. 
+  If the dependency does need a reference (i.e. when fixed_axes_list is empty) this can be set to None.
 
-2. **Dependency Formats**:
-   a. **Stencil Shorthand**:
-      - A list of tuples specifying relative positions.
-      - Example: [(-1, 0, 0), (0, 0, 0), (1, 0, 0)]
-      - Indicates dependencies on the previous, current, and next elements along the first axis.
+- `dependent_index`:
+  A tuple representing a dependent index.
 
-   b. **Block Dependency**:
-      - A tuple of the form ((i, j, k), [(i, j, k), ...], fixed_axis), where the first element is a reference index, the second element is a list of dependent indices, and `fixed_axis` specifies the axis along which the dependency is fixed.
-      - Example: ((0, 0, 1), [(0, 0, 0), (0, 0, 2)], 2)
-      - Indicates that the element at (0, 0, 1) depends on elements at (0, 0, 0) and (0, 0, 2) along the third axis.
+- `fixed_axes_list`:
+  A list of axis indices that are considered "fixed".
+  If no axes are fixed, this can be an empty list `[]`.
+  
+- `periodic_axes_list`:
+    A list of axis indices that are considered "periodic".
+    If no axes are periodic, this can be an empty list `[]`.
 
-   c. **Range Dependencies**:
-      - A tuple of the form ((i, j, range), [(i, j, range)], fixed_axis), where `range` specifies a range of indices.
-      - Example: ((0, 0, range(0, 3)), [(0, 0, [0, 1, 2])], 2)
-      - Indicates that the element at (0, 0, range(0, 3)) depends on elements at (0, 0, 0), (0, 0, 1), and (0, 0, 2) along the third axis.
+to process simple stencil patterns, block dependencies, and range dependencies 
+into a fully expanded set of integer index tuples.
 
-   d. **All Components Dependencies**:
-      - A tuple of the form ((i, j, slice(None)), [(i, j, slice(None))], fixed_axis), where `slice(None)` specifies all indices along that axis.
-      - Example: ((0, 0, slice(None)), [(0, 0, slice(None))], 2)
-      - Indicates dependencies on all components along the third axis.
+Examples of the uniform dependency notation
+--------
 
-3. **Mixed Dependencies**:
-   - Mixed dependencies can include various forms of shorthand and full formats combined in a list.
-   - Example: [
-       [(-1, 0, 0), (0, 0, 0), (1, 0, 0)],  # Stencil shorthand
-       ((0, 0, 1), [(0, 0, 0), (0, 0, 2)], 2),  # Block dependency
-       ((0, 0, [0, 2]), [(0, 0, [0, 1, 2])], 2),  # Range dependencies
-       ((0, 0, slice(None)), [(0, 0, slice(None))], 2)  # All components dependencies
-     ]
+(None, (0,0,0), [],[]):      entries with indices (i,j,k) are dependent on the entries with indices (i,j,k).
+(None, (0,1,0), [],[]):      entries with indices (i,j,k) are dependent on the entries with indices (i,j+1,k).
+(None, (-1,1,0), [],[]):     entries with indices (i,j,k) are dependent on the entries with indices (i-1,j+1,k).
+((0,0,0), (-1,1,0), [2],[]): entries with indices (i,j,0) are dependent on the entries with indices (i-1,j+1,0).
+((0,0,0), (-1,1,1), [2],[]): entries with indices (i,j,0) are dependent on the entries with indices (i-1,j+1,1).
+((0,0,1), (-1,1,0), [2],[]): entries with indices (i,j,1) are dependent on the entries with indices (i-1,j+1,0).
 
-Functionality:
---------------
-1. `is_tuple_or_list_of_tuples(variable)`:
-   - Checks if a variable is a tuple or a list of tuples.
+This indicates that there is no specific reference index and no fixed axes.
+The pattern is simply a set of dependent offsets. 
+This example is for a 3-point dependency along the 0 axis in a 3D array.
 
-2. `slice_to_list(slice_obj: slice, axis_length: int) -> List[int]`:
-   - Converts a slice object to a list of indices.
+Shorthand Dependency Notation
+-----------------------------
+1. Simple Stencil (No Reference, No Fixed Axes, No periodic axes)
 
-3. `expand_dependencies(shape: Tuple[int, ...], dependencies: Union[List[Union[Tuple, List]], Tuple]) -> List[Tuple[List[Tuple[int, ...]], List[Tuple[int, ...]], Union[int, Tuple[int, ...]]]]`:
-   - Expands shorthand notations in dependencies to full format.
+In case of a simple stencil the triple structure can be simplified to a single tuple.
 
-4. `expand_indices(indices: Union[List, Tuple], shape: Tuple[int, ...], fixed_axis: Union[int, Tuple[int, ...], None] = None) -> List[Tuple[int, ...]]`:
-   - Expands indices with lists and slices to full indices.
+(None, (0,0,0), [],[]) can be written as (0,0,0).
+(None, (0,1,0), [],[]) can be written as (0,1,0).
+(None, (-1,1,0), [],[]) can be written as (-1,1,0).
 
-5. `product(*args)`:
-   - Computes the Cartesian product of input iterables.
+2. No periodic axes
 
-Example Usage:
---------------
-```python
-shape = (100, 200, 6)
-dependencies = [
-    [(-1, 0, 0), (0, 0, 0), (1, 0, 0)],  # Stencil shorthand
-    ((0, 0, 1), [(0, 0, 0), (0, 0, 2)], 2),  # Block dependency
-    ((0, 0, [0, 2]), [(0, 0, [0, 1, 2])], 2),  # Range dependencies
-    ((0, 0, slice(None)), [(0, 0, slice(None))], 2)  # All components dependencies
-]
+If there are no periodic axes the periodic_axes_list can be omitted.
 
-expanded_dependencies = expand_dependencies(shape, dependencies)
-print(expanded_dependencies)
+((0,0,0), (0,0,1), [2],[]) can be written as ((0,0,0), (0,0,1), [2]).
+
+2. Expansion of Dependent Indices
+
+If list or slice is provided for the dependent indices this will be expanded to a list of dependencies:
+
+Examples:
+([-1,0,1],0,0) expands to [(-1,0,0),(0,0,0),(1,0,0)].
+((0,0,0), ([-1,0,1],0,0), [2]) expands to [((0,0,0), (-1,0,0), [2], []), ((0,0,0), (0,0,0), [2], []), ((0,0,0), (1,0,0), [2], [])].
+((0,0,0), ([-1,0,1],0,[0,1]), [2]) expands to [((0,0,0), (-1,0,0), [2], []), ((0,0,0), (0,0,0), [2], []), ((0,0,0), (1,0,0), [2], []), ((0,0,0), (-1,0,1), [2], []), ((0,0,0), (0,0,1), [2], []), ((0,0,1), (1,0,1), [2], [])].
+For a 7-point stencil in 3D the notation is: [([-1,0,1],0,0),(0,[-1,0,1],0),(0,0,[-1,0,1])]
+
+For block dependencies it can be convenient to specify a range using the slice notation:
+((0,0,0), (1,0,slice(None)), [2]) expands to [((0,0,0), (1,0,0), [2], []), ((0,0,0), (1,0,1), [2], []), ..., ((0,0,0), (1,0,shape[2]-1), [2], [])].
+
+3. Expansion of Reference Indices
+For the reference indices the expansion is similar to the dependent indices
+
+Example:
+((0,0,[0,2,4]), (0,0,[1,3,5]), [2]) expands to [((0,0,0), (0,0,[1,3,5]), [2], []), ((0,0,2), (0,0,[1,3,5]), [2], []), ((0,0,4), (0,0,[1,3,5]), [2], [])]
+For each of the entries the dependent indiced can next be further expanded.
 """
 
 import numpy as np
@@ -79,282 +84,389 @@ from numba import njit, jit
 import numpy as np
 from typing import List, Tuple, Union
 
-def first_fit_packing(T):
-    m, n = T.shape
-    TT = T.transpose() @ T 
-    g = np.full(n, n, dtype=int)
+def expand_dependencies(shape, dependencies):
+    """
+    Expand a given set of dependencies into a uniform list of tuples in the 
+    universal dependency notation, fully expanded.
+
+    Universal Dependency Notation:
+    ------------------------------
+    (reference_index, dependent_index, fixed_axes_list, periodic_axes_list)
+
+    - reference_index: A tuple representing the reference position in the array,
+      or None if no reference is needed (e.g., simple stencil).
+    - dependent_index: A tuple representing a single dependent position in the array.
+    - fixed_axes_list: A list of axes considered "fixed" (must remain a list).
+      Use [] if none are fixed.
+    - periodic_axes_list: A list of axes considered "periodic" (must remain a list).
+
+    Shorthand Notation:
+    -------------------
+    For simple stencils without reference and fixed axes, you can write just 
+    the dependent index tuple (e.g., (0,0,0)) instead of (None, (0,0,0), [], []).
+
+    Expansion Rules:
+    ----------------
+    Any slice, list, or range in the reference_index or dependent_index should 
+    be expanded into a list of integer index tuples.
+
+    Steps Implemented by this Function:
+    1. Normalize input: If `dependencies` is a single tuple, convert it into a list.
+    2. Ensure each dependency is in triple form:
+       - If a dependency is just a single tuple (e.g., (0,1,0)), convert it to 
+         (None, (0,1,0), [], []).
+       - Otherwise, it should already be in (reference_index, dependent_index, fixed_axes_list) form.
+    3. Ensure fixed_axes_list is a list. If None is found, convert it to [].
+    4. Expand reference_index and dependent_index:
+       - For each dimension, if you encounter:
+         * An integer: no change.
+         * A slice: expand it into a list of integers [0 ... shape[dim]-1] or the specified subrange.
+         * A list of integers: treat it as multiple indices along that dimension.
+         * A range object: convert it to a list of integers.
+       - Perform a Cartesian product to get all combinations if multiple dimensions have expansions.
+    5. After expansion, return a fully expanded list of (reference_index, dependent_index, fixed_axes_list) tuples 
+       with only integers in indices.
+
+    Example:
+    --------
+    shape = (4,4,4)
+
+    Input:
+    dependencies = ((0,0,[1,3,5]), ([-1,0,1],0,0), [2])
+
+    After expansion, this yields multiple entries like:
+    [((0,0,1), (-1,0,0), [2], []),
+     ((0,0,1), (0,0,0), [2], []),
+     ((0,0,1), (1,0,0), [2], []),
+     ((0,0,3), (-1,0,0), [2], []),
+     ... and so forth]
+
+    Returns:
+    --------
+    A list of tuples in the form (reference_index, dependent_index, fixed_axes_list)
+    with all indices fully expanded into integers.
+    """
+
+    # Helper functions
+    def slice_to_list(slc, dim_size):
+        return list(range(*slc.indices(dim_size)))
+
+    def expand_axis(axis_val, dim_size):
+        """
+        Expand a single axis value which could be:
+        - int
+        - slice
+        - list of ints/slices
+        - range
+        """
+        if isinstance(axis_val, int):
+            # Single integer, no expansion needed
+            return [axis_val]
+        elif isinstance(axis_val, slice):
+            # Expand slice
+            return slice_to_list(axis_val, dim_size)
+        elif isinstance(axis_val, list):
+            # Could be a list of integers or slices
+            expanded_list = []
+            for v in axis_val:
+                if isinstance(v, int):
+                    expanded_list.append(v)
+                elif isinstance(v, slice):
+                    expanded_list.extend(slice_to_list(v, dim_size))
+                elif isinstance(v, range):
+                    expanded_list.extend(list(v))
+                else:
+                    raise ValueError("Unsupported element in list for axis expansion: {}".format(type(v)))
+            return expanded_list
+        elif isinstance(axis_val, range):
+            return list(axis_val)
+        else:
+            raise ValueError("Unsupported type in axis specification: {}".format(type(axis_val)))
+
+    def expand_index(idx, shape):
+        """
+        Expand a single index tuple. The index can contain ints, slices, lists, or ranges.
+        Returns a list of fully expanded tuples, or [None] if idx is None.
+        """
+        if not isinstance(idx, tuple):
+            raise ValueError("Index must be a tuple or None.")
+
+        expanded_dims = []
+        for i, val in enumerate(idx):
+            expanded_dims.append(expand_axis(val, shape[i]))
+
+        # Cartesian product of all expanded dimensions
+        from itertools import product
+        return list(product(*expanded_dims))
+
+    # Normalize dependencies to a list
+    if isinstance(dependencies, tuple):
+        dependencies = [dependencies]
+
+    # Convert shorthand notation to full triple form
+    normalized_deps = []
+    for dep in dependencies:
+        if not isinstance(dep, tuple):
+            raise ValueError("Each dependency must be a tuple.")
+
+        if len(dep) == 3 and isinstance(dep[1], tuple):
+            # Almost in full, assuming no periodic axes
+            reference_index, dependent_index, fixed_axes = dep
+            periodic_axes = []
+        elif len(dep) == 4 and isinstance(dep[1], tuple):
+            # Already in full form
+            reference_index, dependent_index, fixed_axes, periodic_axes = dep
+        else:
+            # Shorthand form (e.g., (0,1,0))
+            reference_index = (0,)*len(shape)
+            dependent_index = dep
+            fixed_axes = []
+            periodic_axes = []
+
+        # Ensure fixed_axes is a list
+        if fixed_axes is None:
+            fixed_axes = []
+        elif not isinstance(fixed_axes, list):
+            raise ValueError("fixed_axes_list must be a list or None.")
+        
+        # Ensure periodic_axes is a list
+        if periodic_axes is None:
+            periodic_axes = []
+        elif not isinstance(periodic_axes, list):
+            raise ValueError("periodic_axes_list must be a list or None.")
+
+        normalized_deps.append((reference_index, dependent_index, fixed_axes, periodic_axes))
+
+    # Now expand reference and dependent indices
+    expanded_deps = []
+    for (ref_idx, dep_idx, fixed_axes, periodic_axes) in normalized_deps:
+        if (ref_idx==None):
+            if len(fixed_axes) > 0:
+                raise ValueError("Fixed axes are not allowed when reference index is None.")
+            ref_idx = (0,)*len(shape)
+        ref_expanded = expand_index(ref_idx, shape)    # list of tuples or [None]
+        dep_expanded = expand_index(dep_idx, shape)    # list of tuples
+
+        for r in ref_expanded:
+            for d in dep_expanded:
+                expanded_deps.append((r, d, fixed_axes, periodic_axes))
+
+    return expanded_deps
+
+@njit
+def ravel_index_numba(shape, index):
+    "Convert a multidimensional index to a flat index."
+    lin_idx = 0
+    for i in range(len(shape)):
+        lin_idx = lin_idx * shape[i] + index[i]
+    return lin_idx
+
+@njit
+def unravel_index_numba(lin_idx, shape):
+    "Convert a flat (linear) index to a multidimensional index."
+    idx = np.empty(len(shape), dtype=np.int64)
+    for i in range(len(shape) - 1, -1, -1):
+        idx[i] = lin_idx % shape[i]
+        lin_idx //= shape[i]
+    return idx
+
+@njit
+def iterate_over_entries(shape, shape_rel, in_pos, out_pos, row_indices, col_indices, start_idx):
+    """
+    Iterate over all valid relative entries defined by shape_rel and fill row_indices and col_indices.
+    This function:
+    - Interprets shape_rel as the size of the relative axes.
+    - For each combination of relative indices (idx_rel), computes the absolute positions (out_idx, in_idx)
+      by adding idx_rel to out_pos and in_pos and applying periodicity.
+    - Stores the computed flat indices in row_indices and col_indices.
+
+    Args:
+        shape (np.ndarray): The full shape of the multidimensional array.
+        shape_rel (np.ndarray): Shape array representing the size of relative axes.
+        in_pos (np.ndarray): Input position array (adjusted for relative indexing).
+        out_pos (np.ndarray): Output position array (adjusted for relative indexing).
+        row_indices (np.ndarray): Preallocated array for row indices.
+        col_indices (np.ndarray): Preallocated array for column indices.
+        start_idx (int): Starting index in the row_indices/col_indices arrays to place data.
+
+    Returns:
+        int: The updated index after filling in entries.
+    """
+    num_dims = shape.size
+    size_lin = 1
+    for d in range(num_dims):
+        size_lin *= shape_rel[d]
+
+    out_idx = np.empty(num_dims, dtype=np.int64)
+    in_idx = np.empty(num_dims, dtype=np.int64)
+
+    current_idx = start_idx
+    for idx_lin in range(size_lin):
+        idx_rel = unravel_index_numba(idx_lin, shape_rel)
+
+        # Compute absolute indices for output and input
+        for d in range(num_dims):
+            # out position modulo shape
+            out_idx[d] = (out_pos[d] + idx_rel[d]) % shape[d]
+            # in position modulo shape
+            in_idx[d] = (in_pos[d] + idx_rel[d]) % shape[d]
+
+        # Convert multidimensional indices to linear form
+        row_indices[current_idx] = ravel_index_numba(shape, out_idx)
+        col_indices[current_idx] = ravel_index_numba(shape, in_idx)
+        current_idx += 1
+
+    return current_idx
+
+def generate_sparsity_pattern(shape, dependencies):
+    """
+    Generate row and column indices for the sparse matrix representation
+    of a given stencil pattern. This function attempts to minimize loops
+    over large dimensions by focusing on relative axes and using Numba-compiled
+    helper functions for speed.
+
+    Parameters:
+    - shape: Tuple of ints, the shape of the multidimensional array.
+    - dependencies: A list of tuples (out_pos, in_pos, fixed_axes, periodic_axes)
+      representing the stencil pattern. Each dependency indicates how output positions
+      relate to input positions and which axes are fixed or periodic.
+
+    Returns:
+    - row_indices: 1D numpy array of row indices for the sparse pattern.
+    - col_indices: 1D numpy array of column indices for the sparse pattern.
+    """
+    shape = np.array(shape, dtype=np.int64)
+    num_dims = len(shape)
+
+    # Estimate total number of non-zero elements needed
+    total_elements = 0
+    for dep in dependencies:
+        out_pos, in_pos, fixed_axes, periodic_axes = dep
+        in_pos_arr = np.array(in_pos, dtype=np.int64)
+        shape_rel = shape.copy()
+
+        # shape_rel adjusted for non-fixed and periodic axes
+        shape_rel -= np.abs(in_pos_arr)
+        for d in periodic_axes:
+            shape_rel[d] += abs(in_pos_arr[d])
+        for d in fixed_axes:
+            shape_rel[d] = 1
+        total_elements += np.prod(shape_rel)
+
+    # Preallocate arrays for row and col indices
+    row_indices = np.empty(total_elements, dtype=np.int64)
+    col_indices = np.empty(total_elements, dtype=np.int64)
+
+    current_index = 0
+    for dep in dependencies:
+        out_pos, in_pos, fixed_axes, periodic_axes = dep
+        out_pos_arr = np.array(out_pos, dtype=np.int64)
+        in_pos_arr = np.array(in_pos, dtype=np.int64)
+        shape_rel = shape.copy()
+
+        # Adjust shape_rel for periodic and fixed axes
+        shape_rel -= np.abs(in_pos_arr)
+        for d in periodic_axes:
+            shape_rel[d] += abs(in_pos_arr[d])
+        is_fixed = np.zeros(num_dims, dtype=np.bool_)
+        for d in fixed_axes:
+            shape_rel[d] = 1
+            is_fixed[d] = True
+
+        # Adjust out_pos and in_pos so that one of them starts at zero for relative indexing
+        # This reduces complexity when computing final positions.
+        for d in range(num_dims):
+            if not is_fixed[d]:
+                if in_pos_arr[d] < 0:
+                    out_pos_arr[d] = -in_pos_arr[d]
+                    in_pos_arr[d] = 0
+                else:
+                    out_pos_arr[d] = 0
+
+        # Fill row and col indices using the helper
+        current_index = iterate_over_entries(shape, shape_rel, in_pos_arr, out_pos_arr,
+                                             row_indices, col_indices, current_index)
+
+    # Sort the indices by row and then by column for canonical form
+    sorted_idx = np.unique(np.concatenate((col_indices.reshape((1, -1)), row_indices.reshape((1, -1))), axis=0), axis=1)
+    col_indices = sorted_idx[0, :]
+    row_indices = sorted_idx[1, :]
+    
+    return row_indices, col_indices
+
+@njit
+def group_columns_by_non_overlap_numba(indptr, indices):
+    n = indptr.size - 1
+    g = np.full(n, n, dtype=np.int64)
     groupnum = 0
     J = np.arange(n)
     while len(J) > 0:
         g[J[0]] = groupnum
-        col = TT[:, [J[0]]].toarray().ravel()
+        col = np.zeros(n, dtype=np.bool_)
+        for i in range(indptr[J[0]], indptr[J[0]+1]):
+            col[indices[i]] = True
         for k in J:
             if (not col[k]):
-                col |= TT[:, [k]].toarray().ravel()
+                for i in range(indptr[k], indptr[k+1]):
+                    col[indices[i]] = True
                 g[k] = groupnum
         J = np.where(g == n)[0]
         groupnum += 1
     return g, groupnum
 
-def colgroup(*args):
+def colgroup(*args, try_reorder=True):
     if isinstance(args[0], sparray):
-        S = csr_array(args[0])
-        T = csr_array((S.data != 0, S.indices, S.indptr), shape=S.shape)
+        S = csc_array(args[0])
+        T = csc_array((S.data != 0, S.indices, S.indptr), shape=S.shape)
     elif isinstance(args[0], np.ndarray) and isinstance(args[1], np.ndarray):
         rows = args[0]
         cols = args[1]
-        data = np.ones(rows.shape, dtype=bool)
-        T = csr_array((data, (rows, cols)))
+        data = np.ones(rows.shape, dtype=np.bool_)
+        T = csc_array((data, (rows, cols)))
     else:
         raise ValueError("Input should be a sparse array, or two ndarrays containing row and col indices")    
 
-    g, num_groups = first_fit_packing(T)
+    TT = T.transpose() @ T
+    g, num_groups = group_columns_by_non_overlap_numba(TT.indptr, TT.indices)
     
+    if try_reorder:   
     # Form the reverse column minimum-degree ordering.
-    p = reverse_cuthill_mckee(T)
-    p = p[::-1]
-    T = T[:, p]
-    g2, num_groups2 = first_fit_packing(T)
+        p = reverse_cuthill_mckee(T)
+        p = p[::-1]
+        T = T[:, p]
+        TT = T.transpose() @ T
+        g2, num_groups2 = group_columns_by_non_overlap_numba(TT.indptr, TT.indices)
+        # Use whichever packing required fewer groups.
+        if num_groups2 < num_groups:
+            q = np.argsort(p)
+            g = g2[q]
+            num_groups = num_groups2
     
-    # Use whichever packing required fewer groups.
-    if num_groups <= num_groups2:
-        gout = g
-    else:
-        q = np.argsort(p)
-        gout = g2[q]
-        num_groups = num_groups2
-    return gout, num_groups
-
-def calculate_max_elements(dependencies, shapes_blocked):
-    max_elements = 0
-    for i in range(len(dependencies)):
-        shape_blocked = shapes_blocked[i]
-        size = 1
-        for dim in shape_blocked:
-            size *= dim
-        max_elements += size * len(dependencies[i][0]) * len(dependencies[i][1])
-    return max_elements
-
-
-@njit
-def flat_index_numba(shape, index):
-    """Convert a multidimensional index to a flat index."""
-    flat_idx = 0
-    for i in range(len(shape)):
-        flat_idx = flat_idx * shape[i] + index[i]
-    return flat_idx
-
-@njit
-def is_within_bounds(index, shape):
-    for i in range(len(shape)):
-        if not (0 <= index[i] < shape[i]):
-            return False
-    return True
-
-@njit
-def process_dependency(shape, shape_blocked, relative_positions, dependents, rows, cols, start_count):
-    count = start_count
-    for idx in np.ndindex(shape_blocked):
-        flat_idx = flat_index_numba(shape, idx)
-        for rel_pos in relative_positions:
-            row_idx = np.array(idx) + np.array(rel_pos)
-            if is_within_bounds(row_idx, shape):
-                flat_row_idx = flat_index_numba(shape, row_idx)
-                for dep_idx in dependents:
-                    col_idx = np.array(idx) + np.array(dep_idx)
-                    if is_within_bounds(col_idx, shape):
-                        flat_col_idx = flat_index_numba(shape, col_idx)
-                        rows[count] = flat_row_idx
-                        cols[count] = flat_col_idx
-                        count += 1
-    return count
-
-def construct_sparse_matrix_pattern(shape, dependencies):
-    shapes_blocked = create_shapes_blocked(shape, dependencies)
-    max_elements = calculate_max_elements(dependencies, shapes_blocked)
-    rows = np.empty(max_elements, dtype=np.int64)
-    cols = np.empty(max_elements, dtype=np.int64)
-    
-    count = 0
-    for i in range(len(dependencies)):
-        relative_positions = dependencies[i][0]
-        dependents = dependencies[i][1]
-        shape_blocked = shapes_blocked[i]
-        # Call the Numba-compiled function
-        count = process_dependency(shape, shape_blocked, relative_positions, dependents, rows, cols, count)
-    
-    rows = rows[:count]
-    cols = cols[:count]
-    return rows, cols
-
-def is_tuple_or_list_of_tuples(variable):
-    """
-    Check if the variable is a tuple or a list of tuples.
-    
-    Args:
-        variable: The variable to check.
-        
-    Returns:
-        bool: True if the variable is a tuple or a list of tuples, False otherwise.
-    """
-    if isinstance(variable, tuple):
-        return True
-    elif isinstance(variable, list) and all(isinstance(item, tuple) for item in variable):
-        return True
-    return False
-
-def slice_to_list(slice_obj, axis_length):
-    """
-    Convert a slice object to a list of indices.
-    
-    Args:
-        slice_obj (slice): The slice object.
-        axis_length (int): The length of the axis.
-        
-    Returns:
-        List[int]: The list of indices.
-    """
-    return list(range(*slice_obj.indices(axis_length)))
-
-def expand_dependencies(shape, dependencies):
-    """
-    Convert shorthand notations in dependencies to full format.
-    
-    Args:
-        shape (Tuple[int, ...]): The shape of the array.
-        dependencies (Union[List[Union[Tuple, List]], Tuple]): The dependencies to expand.
-        
-    Returns:
-        List[Tuple[List[Tuple[int, ...]], List[Tuple[int, ...]], Union[int, Tuple[int, ...]]]]: The expanded dependencies.
-    """
-    expanded_dependencies = []
-    if not isinstance(dependencies, list):
-        dependencies = [dependencies]
-    
-    for dep in dependencies:
-        if isinstance(dep, tuple) and len(dep) == 3 and is_tuple_or_list_of_tuples(dep[0]) and is_tuple_or_list_of_tuples(dep[1]):
-            reference, dependents, fixed_axis = dep
-            if isinstance(fixed_axis, int):
-                fixed_axis = [fixed_axis]
-            elif isinstance(fixed_axis, slice):
-                fixed_axis = slice_to_list(fixed_axis, len(shape))
-            elif isinstance(fixed_axis, range):
-                fixed_axis = list(fixed_axis)
-            shape_blocked = tuple(1 if i in fixed_axis else shape[i] for i in range(len(shape)))            
-            expanded_reference = expand_indices(reference, shape)
-            expanded_dependents = expand_indices(dependents, shape)
-        elif isinstance(dep, tuple) and len(dep) == 2 and is_tuple_or_list_of_tuples(dep[0]) and is_tuple_or_list_of_tuples(dep[1]):
-            fixed_axis = [-1]
-            shape_blocked = shape
-            reference, dependents = dep
-            expanded_reference = expand_indices(reference, shape)
-            expanded_dependents = expand_indices(dependents, shape)
-        elif isinstance(dep, tuple) and len(dep) == 1 and is_tuple_or_list_of_tuples(dep[0]) and is_tuple_or_list_of_tuples(dep[1]):
-            expanded_reference = [(0, 0, 0)]
-            fixed_axis = [-1]
-            shape_blocked = shape
-            expanded_dependents = expand_indices(dep[0], shape)
-        elif isinstance(dep, tuple) and len(dep) == len(shape):
-            expanded_reference = [(0, 0, 0)]
-            fixed_axis = [-1]
-            shape_blocked = shape
-            expanded_dependents = expand_indices(dep, shape)
-        elif is_tuple_or_list_of_tuples(dep):
-            expanded_reference = [(0, 0, 0)]
-            fixed_axis = [-1]
-            shape_blocked = shape
-            expanded_dependents = expand_indices(dep, shape)
-        else:
-            raise ValueError("Invalid dependency format.")
-        expanded_dependencies.append((expanded_reference, expanded_dependents, fixed_axis))
-    return expanded_dependencies
-
-def create_shapes_blocked(shape, dependencies):
-    shapes_blocked = []
-    for dep in dependencies:
-        _, _, fixed_axis = dep
-        shape_blocked = tuple(1 if i in fixed_axis else dim for i, dim in enumerate(shape))
-        shapes_blocked.append(shape_blocked)
-    return shapes_blocked
-
-def expand_indices(indices: Union[List, Tuple], shape: Tuple[int, ...]) -> List[Tuple[int, ...]]:
-    """
-    Expand indices with lists and slices to full indices.
-    
-    Args:
-        indices (Union[List, Tuple]): The indices to expand.
-        shape (Tuple[int, ...]): The shape of the array.
-        
-    Returns:
-        List[Tuple[int, ...]]: The expanded indices.
-    """
-    expanded_indices = []
-    if isinstance(indices, tuple):
-        indices = [indices]
-
-    def expand_index(index, axis_length):
-        if isinstance(index, slice):
-            return slice_to_list(index, axis_length)
-        if isinstance(index, range):
-            return list(index)
-        elif isinstance(index, list):
-            expanded_list = []
-            for item in index:
-                expanded_list.extend(expand_index(item, axis_length))
-            return expanded_list
-        else:
-            return [index]
-        
-    for index in indices:
-        axis_expansion = []
-        for i in range(len(shape)):
-            expanded_axis_indices = expand_index(index[i], shape[i])
-            axis_expansion.append(expanded_axis_indices)
-        expanded_indices.extend([tuple(x) for x in product(*axis_expansion)])
-    return expanded_indices
-
-def product(*args):
-    """
-    Cartesian product of input iterables.
-    
-    Args:
-        *args: The input iterables.
-        
-    Yields:
-        Tuple: The next product tuple.
-    """
-    pools = [tuple(pool) for pool in args]
-    result = [[]]
-    for pool in pools:
-        result = [x + [y] for x in result for y in pool]
-    for prod in result:
-        yield tuple(prod)
-
-def axis_is_touched(dependencies):
-    axis_touched = np.zeros(len(dependencies[0][0][0]), dtype=bool)
-    for dep in dependencies:
-        reference, dependent, _ = dep
-        for ref in reference:
-            axis_touched |= (np.array(ref) != 0)
-        for dep2 in dependent:
-            axis_touched |= (np.array(dep2) != 0)                           
-    return tuple(axis_touched)
-
+    return g, num_groups
 class NumJac:
-    def __init__(self, shape, stencil):
+    def __init__(self, shape = None, stencil = None, eps_jac = 1e-6):
         self.shape = shape
-        dependencies = expand_dependencies(shape, stencil)
-        shape_filt = tuple(np.array(axis_is_touched(dependencies),dtype = np.int64) * (np.array(shape, dtype = np.int64)-1) + np.ones(len(shape),dtype = np.int64))
-        rows, cols = construct_sparse_matrix_pattern(shape_filt, dependencies)
-        gr, self.num_gr = colgroup(rows, cols)
-        self.gr = np.broadcast_to(gr.reshape(shape_filt), shape)
-        rows, cols = construct_sparse_matrix_pattern(shape, dependencies)
-        sorted_indices = np.lexsort((rows, cols))
-        rows = rows[sorted_indices]
-        cols = cols[sorted_indices]        
-        self.rows = rows
-        self.cols = cols
-        self.eps_jac = 1e-6
+        self.eps_jac = eps_jac
+        self.init_stencil(stencil)
+    
+    def init_stencil(self, stencil):
+        # Handle direct stencil, string keys, or callable stencils
+        if stencil is None:
+            raise ValueError("Stencil must be provided as a pattern, function, or predefined key.")
+
+        if isinstance(stencil, str):
+            # Use a predefined stencil
+            if stencil in stencils_registry:
+                stencil = stencils_registry[stencil](self.shape)
+            else:
+                raise ValueError(f"Unknown stencil key: {stencil}")
+
+        elif callable(stencil):
+            # Generate stencil dynamically
+            stencil = stencil(self.shape)
+        dependencies = expand_dependencies(self.shape, stencil)
+        self.rows, self.cols = generate_sparsity_pattern(self.shape, dependencies)
+        self.gr, self.num_gr = colgroup(self.rows, self.cols)
         
     def __call__(self, f, c):
         f_value = f(c)
