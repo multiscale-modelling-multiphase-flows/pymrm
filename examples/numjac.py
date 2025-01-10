@@ -1,82 +1,3 @@
-"""
-Universal Dependency Notation
------------------------------
-
-This notation provides a consistent format for describing stencil dependencies, 
-block dependencies, and range-based dependencies on multidimensional arrays. 
-Each dependency is represented as a triple:
-
-    (reference_index, dependent_index, fixed_axes_list, periodic_axes_list)
-
-- `reference_index`:
-  A tuple representing the reference position in the array. 
-  If the dependency does need a reference (i.e. when fixed_axes_list is empty) this can be set to None.
-
-- `dependent_index`:
-  A tuple representing a dependent index.
-
-- `fixed_axes_list`:
-  A list of axis indices that are considered "fixed".
-  If no axes are fixed, this can be an empty list `[]`.
-  
-- `periodic_axes_list`:
-    A list of axis indices that are considered "periodic".
-    If no axes are periodic, this can be an empty list `[]`.
-
-to process simple stencil patterns, block dependencies, and range dependencies 
-into a fully expanded set of integer index tuples.
-
-Examples of the uniform dependency notation
---------
-
-(None, (0,0,0), [],[]):      entries with indices (i,j,k) are dependent on the entries with indices (i,j,k).
-(None, (0,1,0), [],[]):      entries with indices (i,j,k) are dependent on the entries with indices (i,j+1,k).
-(None, (-1,1,0), [],[]):     entries with indices (i,j,k) are dependent on the entries with indices (i-1,j+1,k).
-((0,0,0), (-1,1,0), [2],[]): entries with indices (i,j,0) are dependent on the entries with indices (i-1,j+1,0).
-((0,0,0), (-1,1,1), [2],[]): entries with indices (i,j,0) are dependent on the entries with indices (i-1,j+1,1).
-((0,0,1), (-1,1,0), [2],[]): entries with indices (i,j,1) are dependent on the entries with indices (i-1,j+1,0).
-
-This indicates that there is no specific reference index and no fixed axes.
-The pattern is simply a set of dependent offsets. 
-This example is for a 3-point dependency along the 0 axis in a 3D array.
-
-Shorthand Dependency Notation
------------------------------
-1. Simple Stencil (No Reference, No Fixed Axes, No periodic axes)
-
-In case of a simple stencil the triple structure can be simplified to a single tuple.
-
-(None, (0,0,0), [],[]) can be written as (0,0,0).
-(None, (0,1,0), [],[]) can be written as (0,1,0).
-(None, (-1,1,0), [],[]) can be written as (-1,1,0).
-
-2. No periodic axes
-
-If there are no periodic axes the periodic_axes_list can be omitted.
-
-((0,0,0), (0,0,1), [2],[]) can be written as ((0,0,0), (0,0,1), [2]).
-
-2. Expansion of Dependent Indices
-
-If list or slice is provided for the dependent indices this will be expanded to a list of dependencies:
-
-Examples:
-([-1,0,1],0,0) expands to [(-1,0,0),(0,0,0),(1,0,0)].
-((0,0,0), ([-1,0,1],0,0), [2]) expands to [((0,0,0), (-1,0,0), [2], []), ((0,0,0), (0,0,0), [2], []), ((0,0,0), (1,0,0), [2], [])].
-((0,0,0), ([-1,0,1],0,[0,1]), [2]) expands to [((0,0,0), (-1,0,0), [2], []), ((0,0,0), (0,0,0), [2], []), ((0,0,0), (1,0,0), [2], []), ((0,0,0), (-1,0,1), [2], []), ((0,0,0), (0,0,1), [2], []), ((0,0,1), (1,0,1), [2], [])].
-For a 7-point stencil in 3D the notation is: [([-1,0,1],0,0),(0,[-1,0,1],0),(0,0,[-1,0,1])]
-
-For block dependencies it can be convenient to specify a range using the slice notation:
-((0,0,0), (1,0,slice(None)), [2]) expands to [((0,0,0), (1,0,0), [2], []), ((0,0,0), (1,0,1), [2], []), ..., ((0,0,0), (1,0,shape[2]-1), [2], [])].
-
-3. Expansion of Reference Indices
-For the reference indices the expansion is similar to the dependent indices
-
-Example:
-((0,0,[0,2,4]), (0,0,[1,3,5]), [2]) expands to [((0,0,0), (0,0,[1,3,5]), [2], []), ((0,0,2), (0,0,[1,3,5]), [2], []), ((0,0,4), (0,0,[1,3,5]), [2], [])]
-For each of the entries the dependent indiced can next be further expanded.
-"""
-
 import numpy as np
 from scipy.sparse import csc_array, csr_array, lil_array, sparray
 from scipy.sparse.csgraph import reverse_cuthill_mckee
@@ -84,66 +5,25 @@ from numba import njit, prange
 import numpy as np
 from typing import List, Tuple, Union
 
-def expand_dependencies(shape, dependencies):
+def expand_dependencies(shape_in, shape_out, dependencies):
     """
     Expand a given set of dependencies into a uniform list of tuples in the 
-    universal dependency notation, fully expanded.
+    PyMRM dependency notation, fully expanded.
 
-    Universal Dependency Notation:
-    ------------------------------
-    (reference_index, dependent_index, fixed_axes_list, periodic_axes_list)
+    PyMRM Dependency Notation:
+    --------------------------
+    (index_in, index_out, fixed_axes_list, periodic_axes_list)
 
-    - reference_index: A tuple representing the reference position in the array,
+    - index_in: A tuple representing the position in the input (field) array that contributes
+      to the value at index_out.
+    - index_out: A tuple representing the position in the output (function) array,
       or None if no reference is needed (e.g., simple stencil).
-    - dependent_index: A tuple representing a single dependent position in the array.
-    - fixed_axes_list: A list of axes considered "fixed" (must remain a list).
-      Use [] if none are fixed.
-    - periodic_axes_list: A list of axes considered "periodic" (must remain a list).
-
-    Shorthand Notation:
-    -------------------
-    For simple stencils without reference and fixed axes, you can write just 
-    the dependent index tuple (e.g., (0,0,0)) instead of (None, (0,0,0), [], []).
-
-    Expansion Rules:
-    ----------------
-    Any slice, list, or range in the reference_index or dependent_index should 
-    be expanded into a list of integer index tuples.
-
-    Steps Implemented by this Function:
-    1. Normalize input: If `dependencies` is a single tuple, convert it into a list.
-    2. Ensure each dependency is in triple form:
-       - If a dependency is just a single tuple (e.g., (0,1,0)), convert it to 
-         (None, (0,1,0), [], []).
-       - Otherwise, it should already be in (reference_index, dependent_index, fixed_axes_list) form.
-    3. Ensure fixed_axes_list is a list. If None is found, convert it to [].
-    4. Expand reference_index and dependent_index:
-       - For each dimension, if you encounter:
-         * An integer: no change.
-         * A slice: expand it into a list of integers [0 ... shape[dim]-1] or the specified subrange.
-         * A list of integers: treat it as multiple indices along that dimension.
-         * A range object: convert it to a list of integers.
-       - Perform a Cartesian product to get all combinations if multiple dimensions have expansions.
-    5. After expansion, return a fully expanded list of (reference_index, dependent_index, fixed_axes_list) tuples 
-       with only integers in indices.
-
-    Example:
-    --------
-    shape = (4,4,4)
-
-    Input:
-    dependencies = ((0,0,[1,3,5]), ([-1,0,1],0,0), [2])
-
-    After expansion, this yields multiple entries like:
-    [((0,0,1), (-1,0,0), [2], []),
-     ((0,0,1), (0,0,0), [2], []),
-     ((0,0,1), (1,0,0), [2], []),
-     ((0,0,3), (-1,0,0), [2], []),
-     ... and so forth]
+    - fixed_axes_list: A list of axis indices that are considered fixed.
+    - periodic_axes_list: A list of axis indices that are considered periodic.
 
     Returns:
     --------
-    A list of tuples in the form (reference_index, dependent_index, fixed_axes_list)
+    A list of tuples in the form (index_in, index_out, fixed_axes_list, periodic_axes_list)
     with all indices fully expanded into integers.
     """
 
@@ -209,17 +89,22 @@ def expand_dependencies(shape, dependencies):
         if not isinstance(dep, tuple):
             raise ValueError("Each dependency must be a tuple.")
 
-        if len(dep) == 3 and isinstance(dep[1], tuple):
+        if len(dep) == 3 and isinstance(dep[0], tuple):
             # Almost in full, assuming no periodic axes
-            reference_index, dependent_index, fixed_axes = dep
+            index_in, index_out, fixed_axes = dep
             periodic_axes = []
-        elif len(dep) == 4 and isinstance(dep[1], tuple):
+        elif len(dep) == 4 and isinstance(dep[0], tuple):
             # Already in full form
-            reference_index, dependent_index, fixed_axes, periodic_axes = dep
+            index_in, index_out, fixed_axes, periodic_axes = dep
+            for d in periodic_axes:
+                if d in fixed_axes:
+                    raise ValueError("Axis cannot be both fixed and periodic.")
+                if (shape_in[d] != shape_out[d]):
+                    raise ValueError("Periodic axes must have the same size in input and output shapes.")
         else:
             # Shorthand form (e.g., (0,1,0))
-            reference_index = (0,)*len(shape)
-            dependent_index = dep
+            index_in = dep
+            index_out = (0,)*len(shape_out)
             fixed_axes = []
             periodic_axes = []
 
@@ -235,21 +120,21 @@ def expand_dependencies(shape, dependencies):
         elif not isinstance(periodic_axes, list):
             raise ValueError("periodic_axes_list must be a list or None.")
 
-        normalized_deps.append((reference_index, dependent_index, fixed_axes, periodic_axes))
+        normalized_deps.append((index_in, index_out, fixed_axes, periodic_axes))
 
     # Now expand reference and dependent indices
     expanded_deps = []
-    for (ref_idx, dep_idx, fixed_axes, periodic_axes) in normalized_deps:
-        if (ref_idx==None):
+    for (idx_in, idx_out, fixed_axes, periodic_axes) in normalized_deps:
+        if (idx_out==None):
             if len(fixed_axes) > 0:
-                raise ValueError("Fixed axes are not allowed when reference index is None.")
-            ref_idx = (0,)*len(shape)
-        ref_expanded = expand_index(ref_idx, shape)    # list of tuples or [None]
-        dep_expanded = expand_index(dep_idx, shape)    # list of tuples
+                raise ValueError("Fixed axes are not allowed when the out-index is None.")
+            idx_out = (0,)*len(shape_out)
+        in_expanded = expand_index(idx_in, shape_in)    # list of tuples
+        out_expanded = expand_index(idx_out, shape_out)    # list of tuples or [None]
 
-        for r in ref_expanded:
-            for d in dep_expanded:
-                expanded_deps.append((r, d, fixed_axes, periodic_axes))
+        for idx_out in out_expanded:
+            for idx_in in in_expanded:
+                expanded_deps.append((idx_in, idx_out, fixed_axes, periodic_axes))
 
     return expanded_deps
 
@@ -271,28 +156,29 @@ def unravel_index_numba(lin_idx, shape):
     return idx
 
 @njit
-def iterate_over_entries(shape, shape_rel, in_pos, out_pos, row_indices, col_indices, start_idx):
+def iterate_over_entries(shape_in, shape_out, shape_rel, idx_in, idx_out, row_indices, col_indices, entry_idx):
     """
     Iterate over all valid relative entries defined by shape_rel and fill row_indices and col_indices.
     This function:
     - Interprets shape_rel as the size of the relative axes.
-    - For each combination of relative indices (idx_rel), computes the absolute positions (out_idx, in_idx)
-      by adding idx_rel to out_pos and in_pos and applying periodicity.
+    - For each combination of relative indices (idx_rel), computes the absolute positions (idx_out, idx_in)
+      by adding idx_rel to idx_out and idx_in and applying periodicity.
     - Stores the computed flat indices in row_indices and col_indices.
 
     Args:
-        shape (np.ndarray): The full shape of the multidimensional array.
+        shape_in (np.ndarray): The full shape of the multidimensional input (field) array.
+        shape_out (np.ndarray): The full shape of the multidimensional output (function) array.
         shape_rel (np.ndarray): Shape array representing the size of relative axes.
-        in_pos (np.ndarray): Input position array (adjusted for relative indexing).
-        out_pos (np.ndarray): Output position array (adjusted for relative indexing).
+        idx_in (np.ndarray): Input position array (adjusted for relative indexing).
+        idx_out (np.ndarray): Output position array (adjusted for relative indexing).
         row_indices (np.ndarray): Preallocated array for row indices.
         col_indices (np.ndarray): Preallocated array for column indices.
-        start_idx (int): Starting index in the row_indices/col_indices arrays to place data.
+        entry_idx (int): Starting index in the row_indices/col_indices arrays to place data.
 
     Returns:
         int: The updated index after filling in entries.
     """
-    num_dims = shape.size
+    num_dims = shape_in.size
     size_lin = 1
     for d in range(num_dims):
         size_lin *= shape_rel[d]
@@ -300,25 +186,25 @@ def iterate_over_entries(shape, shape_rel, in_pos, out_pos, row_indices, col_ind
     out_idx = np.empty(num_dims, dtype=np.int64)
     in_idx = np.empty(num_dims, dtype=np.int64)
 
-    current_idx = start_idx
+    current_idx = entry_idx
     for idx_lin in range(size_lin):
         idx_rel = unravel_index_numba(idx_lin, shape_rel)
 
         # Compute absolute indices for output and input
         for d in range(num_dims):
             # out position modulo shape
-            out_idx[d] = (out_pos[d] + idx_rel[d]) % shape[d]
+            out_idx[d] = (idx_out[d] + idx_rel[d]) % shape_out[d]
             # in position modulo shape
-            in_idx[d] = (in_pos[d] + idx_rel[d]) % shape[d]
+            in_idx[d] = (idx_in[d] + idx_rel[d]) % shape_in[d]
 
         # Convert multidimensional indices to linear form
-        row_indices[current_idx] = ravel_index_numba(shape, out_idx)
-        col_indices[current_idx] = ravel_index_numba(shape, in_idx)
+        row_indices[current_idx] = ravel_index_numba(shape_out, out_idx)
+        col_indices[current_idx] = ravel_index_numba(shape_in, in_idx)
         current_idx += 1
 
     return current_idx
 
-def generate_sparsity_pattern(shape, dependencies):
+def generate_sparsity_pattern(shape_in, shape_out, dependencies):
     """
     Generate row and column indices for the sparse matrix representation
     of a given stencil pattern. This function attempts to minimize loops
@@ -326,8 +212,9 @@ def generate_sparsity_pattern(shape, dependencies):
     helper functions for speed.
 
     Parameters:
-    - shape: Tuple of ints, the shape of the multidimensional array.
-    - dependencies: A list of tuples (out_pos, in_pos, fixed_axes, periodic_axes)
+    - shape_in: Tuple of ints, the shape of the multidimensional array corresponding to the field.
+    - shape_out: Tuple of ints, the shape of the multidimensional array corresponding to the function.
+    - dependencies: A list of tuples (idx_out, idx_in, fixed_axes, periodic_axes)
       representing the stencil pattern. Each dependency indicates how output positions
       relate to input positions and which axes are fixed or periodic.
 
@@ -335,57 +222,50 @@ def generate_sparsity_pattern(shape, dependencies):
     - row_indices: 1D numpy array of row indices for the sparse pattern.
     - col_indices: 1D numpy array of column indices for the sparse pattern.
     """
-    shape = np.array(shape, dtype=np.int64)
-    num_dims = len(shape)
+    shape_in = np.array(shape_in, dtype=np.int64)
+    shape_out = np.array(shape_out, dtype=np.int64)
+    num_dims = len(shape_in)
+    if num_dims != len(shape_out):
+        raise ValueError("Input and output shapes must have the same number of dimensions.")
 
     # Estimate total number of non-zero elements needed
     total_elements = 0
     for dep in dependencies:
-        out_pos, in_pos, fixed_axes, periodic_axes = dep
-        in_pos_arr = np.array(in_pos, dtype=np.int64)
-        shape_rel = shape.copy()
-
-        # shape_rel adjusted for non-fixed and periodic axes
-        shape_rel -= np.abs(in_pos_arr)
-        for d in periodic_axes:
-            shape_rel[d] += abs(in_pos_arr[d])
+        idx_in, idx_out, fixed_axes, periodic_axes = dep
+        idx_in_arr = np.array(idx_in, dtype=np.int64)
+        shape_rel = np.minimum(shape_in + np.minimum(-idx_in_arr,0),shape_out + np.minimum(idx_in_arr,0))
         for d in fixed_axes:
-            shape_rel[d] = 1
-        total_elements += np.prod(shape_rel)
+            shape_rel[d] = 1 
+        for d in periodic_axes:  
+            shape_rel[d] = np.minimum(shape_in[d], shape_out[d])
+        shape_rel = np.maximum(shape_rel, 0)
+        total_elements += np.prod(shape_rel)        
 
     # Preallocate arrays for row and col indices
     row_indices = np.empty(total_elements, dtype=np.int64)
     col_indices = np.empty(total_elements, dtype=np.int64)
 
-    current_index = 0
+    entry_index = 0
     for dep in dependencies:
-        out_pos, in_pos, fixed_axes, periodic_axes = dep
-        out_pos_arr = np.array(out_pos, dtype=np.int64)
-        in_pos_arr = np.array(in_pos, dtype=np.int64)
-        shape_rel = shape.copy()
+        idx_in, idx_out, fixed_axes, periodic_axes = dep
+        idx_in_arr = np.array(idx_in, dtype=np.int64)
 
         # Adjust shape_rel for periodic and fixed axes
-        shape_rel -= np.abs(in_pos_arr)
-        for d in periodic_axes:
-            shape_rel[d] += abs(in_pos_arr[d])
-        is_fixed = np.zeros(num_dims, dtype=np.bool_)
+        # Adjust idx_out and idx_in so that one of them starts at zero for relative indexing
+        # This reduces complexity when computing final positions.
+        idx_out_arr = np.maximum(-idx_in_arr,0)
+        idx_in_arr = np.maximum(idx_in_arr,0)
+        shape_rel = np.minimum(shape_in -idx_in_arr,shape_out - idx_out_arr)
         for d in fixed_axes:
             shape_rel[d] = 1
-            is_fixed[d] = True
-
-        # Adjust out_pos and in_pos so that one of them starts at zero for relative indexing
-        # This reduces complexity when computing final positions.
-        for d in range(num_dims):
-            if not is_fixed[d]:
-                if in_pos_arr[d] < 0:
-                    out_pos_arr[d] = -in_pos_arr[d]
-                    in_pos_arr[d] = 0
-                else:
-                    out_pos_arr[d] = 0
+            idx_out_arr[d] = idx_out[d]
+        for d in periodic_axes:
+            shape_rel[d] = np.minimum(shape_in[d], shape_out[d])
+        shape_rel = np.maximum(shape_rel, 0)  
 
         # Fill row and col indices using the helper
-        current_index = iterate_over_entries(shape, shape_rel, in_pos_arr, out_pos_arr,
-                                             row_indices, col_indices, current_index)
+        entry_index = iterate_over_entries(shape_in, shape_out, shape_rel, idx_in_arr, idx_out_arr,
+                                             row_indices, col_indices, entry_index)
 
     # Sort the indices by row and then by column for canonical form
     sorted_idx = np.unique(np.concatenate((col_indices.reshape((1, -1)), row_indices.reshape((1, -1))), axis=0), axis=1)
@@ -414,7 +294,7 @@ def group_columns_by_non_overlap_numba(indptr, indices):
         groupnum += 1
     return g, groupnum
 
-def colgroup(*args, try_reorder=True):
+def colgroup(*args, shape=None, try_reorder=True):
     if isinstance(args[0], sparray):
         S = csc_array(args[0])
         T = csc_array((S.data != 0, S.indices, S.indptr), shape=S.shape)
@@ -422,14 +302,16 @@ def colgroup(*args, try_reorder=True):
         rows = args[0]
         cols = args[1]
         data = np.ones(rows.shape, dtype=np.bool_)
-        T = csc_array((data, (rows, cols)))
+        T = csc_array((data, (rows, cols)), shape=shape)
+        if (shape[0] != shape[1]):
+            try_reorder = False
     else:
         raise ValueError("Input should be a sparse array, or two ndarrays containing row and col indices")    
 
     TT = T.transpose() @ T
     g, num_groups = group_columns_by_non_overlap_numba(TT.indptr, TT.indices)
     
-    if try_reorder:   
+    if try_reorder and num_groups > 1:   
     # Form the reverse column minimum-degree ordering.
         p = reverse_cuthill_mckee(T)
         p = p[::-1]
@@ -458,7 +340,7 @@ def stencil_block_diagonals(ndims=1, axes_diagonals=[], axes_blocks=[-1], period
         for axis in axes_diagonals:
             dep_diagonals = dep_block.copy()
             dep_diagonals[axis] = [-1,0,1]
-            dep = (tuple(dep_block), tuple(dep_diagonals), axes_blocks, periodic_axes)
+            dep = (tuple(dep_diagonals), tuple(dep_block), axes_blocks, periodic_axes)
             dependencies.append(dep)
     return dependencies
 
@@ -488,27 +370,85 @@ def precompute_perturbations_numba(c, dc, num_gr, gr):
 
 
 @njit(parallel=True)
-def compute_dfdc(f_value, perturbed_values, dc, num_gr):
-    dfdc = np.empty(perturbed_values.shape)
+def compute_df(f_value, perturbed_values, num_gr):
+    df = np.empty(perturbed_values.shape)
     for k in prange(num_gr):
-        dfdc[k, ...] = (perturbed_values[k, ...] - f_value) / dc
-    return dfdc
+        df[k, ...] = (perturbed_values[k, ...] - f_value)
+    return df
+
+#@njit(parallel=True)
+def compute_df2(f, f_value, c_values, num_gr):
+    df = np.empty((num_gr,*f_value.shape))
+    for k in prange(num_gr):
+        df[k, ...] = (f(c_values[k, ...]) - f_value)
+    return df
+
 class NumJac:
-    def __init__(self, shape = None, stencil = stencil_block_diagonals, eps_jac = 1e-6, *args, **kwargs):
-        self.shape = shape
+    def __init__(
+        self,
+        shape=None,
+        shape_in=None,
+        shape_out=None,
+        stencil=stencil_block_diagonals,
+        eps_jac=1e-6,
+        **kwargs,
+    ):
+        """
+        Initialize the NumJac class.
+
+        Args:
+            shape (tuple, optional): Shape of the multidimensional array (used when shape_in == shape_out).
+            shape_in (tuple, optional): Shape of the input array (used when shape != shape_out).
+            shape_out (tuple, optional): Shape of the output array (used when shape != shape_out).
+            stencil (callable, optional): Function to generate the stencil. Default is None.
+            eps_jac (float, optional): Perturbation size for numerical Jacobian. Default is 1e-6.
+            *args: Additional positional arguments passed to the stencil function.
+            **kwargs: Additional keyword arguments passed to the stencil function.
+
+        Raises:
+            ValueError: If both `shape` and `shape_in`/`shape_out` are specified or if inputs are inconsistent.
+        """
+        if shape is not None and (shape_in is not None or shape_out is not None):
+            raise ValueError(
+                "Specify either 'shape' or both 'shape_in' and 'shape_out', but not both."
+            )
+
+        if shape is not None:
+            # Default case: shape_in == shape_out
+            self.shape_in = shape
+            self.shape_out = shape
+        elif shape_in is not None and shape_out is not None:
+            # General case: shape_in != shape_out
+            if len(shape_in) != len(shape_out):
+                raise ValueError("Input and output shapes must have the same number of dimensions.")
+            self.shape_in = shape_in
+            self.shape_out = shape_out
+        else:
+            raise ValueError("You must specify either 'shape' or both 'shape_in' and 'shape_out'.")
+
         self.eps_jac = eps_jac
-        self.init_stencil(stencil, *args, **kwargs)
-    
-    def init_stencil(self, stencil, *args, **kwargs):
-        # Handle direct stencil, string keys, or callable stencils
+
+        # Initialize stencil
+        self.init_stencil(stencil, **kwargs)
+
+    def init_stencil(self, stencil, **kwargs):
+        """
+        Initialize the stencil pattern.
+
+        Args:
+            stencil (callable): Function to generate the stencil.
+            *args: Additional positional arguments passed to the stencil function.
+            **kwargs: Additional keyword arguments passed to the stencil function.
+        """
         if stencil is None:
-            raise ValueError("Stencil must be provided as a pattern, function, or predefined key.")
-        elif callable(stencil):
-            # Generate stencil dynamically
-            stencil = stencil(ndims=len(self.shape), *args, **kwargs)
-        self.dependencies = expand_dependencies(self.shape, stencil)
-        self.rows, self.cols = generate_sparsity_pattern(self.shape, self.dependencies)
-        self.gr, self.num_gr = colgroup(self.rows, self.cols)
+            raise ValueError("A stencil function or stencil specification must be provided.")
+        
+        # Call the stencil function with ndims, *args, and **kwargs
+        if callable(stencil):
+            stencil = stencil(ndims=len(self.shape_in), **kwargs)
+        self.dependencies = expand_dependencies(self.shape_in, self.shape_out, stencil)
+        self.rows, self.cols = generate_sparsity_pattern(self.shape_in, self.shape_out, self.dependencies)
+        self.gr, self.num_gr = colgroup(self.rows, self.cols, shape = (np.prod(self.shape_out), np.prod(self.shape_in)))
         
     def __call__(self, f, c):
         f_value = f(c)
@@ -517,17 +457,17 @@ class NumJac:
         dc = (c + dc) - c
         
         # Precompute perturbations using Numba
-        # c_perturb = precompute_perturbations_numba(c, dc, self.num_gr, self.gr)
+        #c_perturb = precompute_perturbations_numba(c, dc, self.num_gr, self.gr)
         c_perturb = np.tile(c[np.newaxis, ...], (self.num_gr,) + (1,) * c.ndim)
         c_perturb.ravel()[c.size * self.gr.ravel() + np.arange(c.size)] += dc.ravel()
     
         # Evaluate function f on perturbed values
-        perturbed_values = np.array([f(c_perturb[k, ...]) for k in range(self.num_gr)])
-        
+        # perturbed_values = np.array([f(c_perturb[k, ...]) for k in range(self.num_gr)])
         # Compute dfdc using Numba
-        dfdc = compute_dfdc(f_value, perturbed_values, dc, self.num_gr)
+        #df = compute_df(f_value, perturbed_values, self.num_gr)
+        df = compute_df2(f, f_value, c_perturb, self.num_gr)
         
-        values = dfdc.reshape((self.num_gr, -1))[self.gr.ravel()[self.cols], self.rows]
+        values = df.reshape((self.num_gr, -1))[self.gr.ravel()[self.cols], self.rows]/dc.ravel()[self.cols]
         jac = csc_array((values, (self.rows, self.cols)), shape=(f_value.size, c.size))
         
         return f_value, jac
