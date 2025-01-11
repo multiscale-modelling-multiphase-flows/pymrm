@@ -368,7 +368,6 @@ def precompute_perturbations_numba(c, dc, num_gr, gr):
     c_perturb = c_perturb_flat.reshape((num_gr,) + c.shape)
     return c_perturb
 
-
 @njit(parallel=True)
 def compute_df(f_value, perturbed_values, num_gr):
     df = np.empty(perturbed_values.shape)
