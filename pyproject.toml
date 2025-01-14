@@ -8,6 +8,7 @@ version = "2.0.0"
 dependencies = [
     "numpy>=1.26",
     "scipy>=1.13",
+    "numba>=0.58"
 ]
 authors = [
     {name = "E.A.J.F. Peters", email = "e.a.j.f.peters@tue.nl"},
@@ -30,6 +31,9 @@ classifiers = [
 
 [tool.setuptools.packages.find]
 where = ["pymrm"]
+
+[tool.setuptools]
+include-package-data = true
 
 [project.urls]
 Homepage = "https://gitlab.tue.nl/SMM/research_projects/eajfpeters/pymrm/"
