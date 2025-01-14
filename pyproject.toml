@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pymrm"
-version = "1.3.8"
+version = "2.0.0"
 dependencies = [
     "numpy>=1.26",
     "scipy>=1.13",
@@ -27,6 +27,9 @@ classifiers = [
     "Programming Language :: Python",
     "License :: OSI Approved :: MIT License"
 ]
+
+[tool.setuptools.packages.find]
+where = ["pymrm"]
 
 [project.urls]
 Homepage = "https://gitlab.tue.nl/SMM/research_projects/eajfpeters/pymrm/"
