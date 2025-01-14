@@ -1,9 +1,9 @@
 """
 Module Name: pymrm
 Author: E.A.J.F. Peters, M. Sint Annaland, M. Galanti, D. Rieder
-Date: 18/04/2024
+Date: 14/01/2025
 License: MIT License
-Version: 1.3.1
+Version: 2.0.0
 
 This module provides functions for multiphase reactor modeling.
 
@@ -36,11 +36,11 @@ Functions:
 Note: Please refer to the function descriptions for more details on their arguments and usage.
 """
 
+import math
 import numpy as np
 from scipy.sparse import csc_array, diags, linalg, block_diag
 from scipy.linalg import norm
 from scipy.optimize import OptimizeResult
-import math
 
 def construct_grad(shape, x_f, x_c=None, bc=(None,None), axis=0):
     """
