@@ -42,19 +42,19 @@ from scipy.sparse import csc_array, diags, linalg, block_diag
 from scipy.linalg import norm
 from scipy.optimize import OptimizeResult
 
-def construct_grad(shape, x_f, x_c=None, bc=(None,None), axis=0):
+def construct_grad(shape, face_positions, cell_centers=None, boundary_conditions=(None, None), axis=0):
     """
     Construct the gradient matrix.
 
     Args:
         shape (tuple): shape of the domain.
-        x_f (ndarray): Face positions
-        x_c (ndarray, optional): Cell center coordinates. If not provided, it will be calculated as the average of neighboring face coordinates.
-        bc (dict, optional): Boundary conditions. Default is None.
+        face_positions (ndarray): Face positions
+        cell_centers (ndarray, optional): Cell center coordinates. If not provided, it will be calculated as the average of neighboring face coordinates.
+        boundary_conditions (dict, optional): Boundary conditions. Default is None.
         axis (int, optional): Dimension to construct the gradient matrix for. Default is 0.
 
     Returns:
-        csc_array: Gradient matrix (Grad).
+        csc_array: Gradient matrix (grad_matrix).
         csc_array: Contribution of the inhomogeneous BC to the gradient (grad_bc).
     """
     # The contributions to the gradient on internal faces that 
@@ -68,33 +68,33 @@ def construct_grad(shape, x_f, x_c=None, bc=(None,None), axis=0):
     else:
         shape = tuple(shape)
         shape_f = list(shape)
-    x_f, x_c = generate_grid(shape[axis], x_f, x_c, generate_x_c = True)
+    face_positions, cell_centers = generate_grid(shape[axis], face_positions, cell_centers, generate_x_c = True)
     
-    Grad = construct_grad_int(shape, x_f, x_c, axis)
+    grad_matrix = construct_grad_int(shape, face_positions, cell_centers, axis)
     
-    if (bc is None):
+    if (boundary_conditions is None):
         shape_f = shape.copy()
         if (axis<0):
             axis += len(shape)       
         shape_f[axis] +=1
         grad_bc = csc_array(shape=(math.prod(shape_f),1))
     else:
-        Grad_bc, grad_bc = construct_grad_bc(shape, x_f, x_c, bc, axis)
-        Grad += Grad_bc
-    return Grad, grad_bc
+        grad_matrix_bc, grad_bc = construct_grad_bc(shape, face_positions, cell_centers, boundary_conditions, axis)
+        grad_matrix += grad_matrix_bc
+    return grad_matrix, grad_bc
 
-def construct_grad_int(shape, x_f,  x_c=None, axis=0):
+def construct_grad_int(shape, face_positions,  cell_centers=None, axis=0):
     """
     Construct the gradient matrix for internal faces.
 
     Args:
         shape (tuple): shape of the domain.
-        x_f (ndarray): Face coordinates.
-        x_c (ndarray, optional): Cell center coordinates. If not provided, it will be calculated as the average of neighboring face coordinates.
+        face_positions (ndarray): Face coordinates.
+        cell_centers (ndarray, optional): Cell center coordinates. If not provided, it will be calculated as the average of neighboring face coordinates.
         axis (int, optional): Dimension to construct the gradient matrix for. Default is 0.
     
     Returns:
-        csc_array: Gradient matrix (Grad).
+        csc_array: Gradient matrix (grad_matrix).
         csc_array: Contribution of the inhomogeneous BC to the gradient (grad_bc).
     """
     # Explanation of implementation:
@@ -119,33 +119,33 @@ def construct_grad_int(shape, x_f,  x_c=None, axis=0):
     i_f = (shape_t[1]+1) * shape_t[2] * np.arange(shape_t[0]).reshape(-1, 1, 1, 1) + shape_t[2] * np.arange(shape_t[1]).reshape((
         1, -1, 1, 1)) + np.arange(shape_t[2]).reshape((1, 1, -1, 1)) + np.array([0, shape_t[2]]).reshape((1, 1, 1, -1))
     
-    if (x_c is None):
-        x_c = 0.5*(x_f[:-1] + x_f[1:])
+    if (cell_centers is None):
+        cell_centers = 0.5*(face_positions[:-1] + face_positions[1:])
     
     dx_inv = np.tile(
-        1 / (x_c[1:] - x_c[:-1]).reshape((1, -1, 1)), (shape_t[0], 1, shape_t[2]))
+        1 / (cell_centers[1:] - cell_centers[:-1]).reshape((1, -1, 1)), (shape_t[0], 1, shape_t[2]))
     values = np.empty(i_f.shape)
     values[:,0,:,0] = np.zeros((shape_t[0],shape_t[2]))
     values[:, 1:, :, 0] = dx_inv
     values[:, :-1, :, 1] = -dx_inv
     values[:,-1,:,1] = np.zeros((shape_t[0],shape_t[2]))
-    Grad_int = csc_array((values.ravel(), i_f.ravel(), range(0,i_f.size + 1,2)), 
+    grad_matrix = csc_array((values.ravel(), i_f.ravel(), range(0,i_f.size + 1,2)), 
                       shape=(shape_t[0]*(shape_t[1]+1)*shape_t[2], shape_t[0]*shape_t[1]*shape_t[2]))
-    return Grad_int
+    return grad_matrix
 
-def construct_grad_bc(shape, x_f, x_c=None, bc=(None, None), axis=0):
+def construct_grad_bc(shape, face_positions, cell_centers=None, boundary_conditions=(None, None), axis=0):
     """
     Construct the gradient matrix for the boundary faces 
 
     Args:
         shape (tuple): shape of the domain.
-        x_f (ndarray): Face coordinates.
-        x_c (ndarray, optional): Cell center coordinates. If not provided, it will be calculated as the average of neighboring face coordinates.
-        bc (dict, optional): Boundary conditions. Default is None.
+        face_positions (ndarray): Face coordinates.
+        cell_centers (ndarray, optional): Cell center coordinates. If not provided, it will be calculated as the average of neighboring face coordinates.
+        boundary_conditions (dict, optional): Boundary conditions. Default is None.
         axis (int, optional): Dimension to construct the gradient matrix for. Default is 0.
 
     Returns:
-        csc_array: Gradient matrix (Grad).
+        csc_array: Gradient matrix (grad_matrix).
         csc_array: Contribution of the inhomogeneous BC to the gradient (grad_bc).
     """
     # For the explanation of resizing see construct_grad_int
@@ -169,19 +169,19 @@ def construct_grad_bc(shape, x_f, x_c=None, bc=(None, None), axis=0):
     # It is a bit subtle because in this case the two opposite faces influence each other
     if (shape_t[1] == 1):
         a, b, d = [None]*2, [None]*2, [None]*2
-        a[0], b[0], d[0] = unwrap_bc(shape, bc[0]) # Get a, b, and d for left bc from dictionary
-        a[1], b[1], d[1] = unwrap_bc(shape, bc[1]) # Get a, b, and d for right bc from dictionary
-        if (x_c is None):
-            x_c = 0.5*(x_f[0:-1] + x_f[1:])
+        a[0], b[0], d[0] = unwrap_bc(shape, boundary_conditions[0]) # Get a, b, and d for left bc from dictionary
+        a[1], b[1], d[1] = unwrap_bc(shape, boundary_conditions[1]) # Get a, b, and d for right bc from dictionary
+        if (cell_centers is None):
+            cell_centers = 0.5*(face_positions[0:-1] + face_positions[1:])
         i_c = shape_t[2] * np.arange(shape_t[0]).reshape((-1, 1, 1)) + np.array(
             (0, 0)).reshape((1, -1, 1)) + np.arange(shape_t[2]).reshape((1, 1, -1))
         i_f = shape_t[2] * np.arange(shape_t[0]).reshape((-1, 1, 1)) + shape_t[2] * np.array([0,1]).reshape((
             1, -1, 1)) + np.arange(shape_t[2]).reshape((1, 1, -1))
         values = np.zeros(shape_f_t)
-        alpha_1 = (x_f[1] - x_f[0]) / ((x_c[0] - x_f[0]) * (x_f[1] - x_c[0]))
-        alpha_2L = (x_c[0] - x_f[0]) / ((x_f[1] - x_f[0]) * (x_f[1] - x_c[0]))
+        alpha_1 = (face_positions[1] - face_positions[0]) / ((cell_centers[0] - face_positions[0]) * (face_positions[1] - cell_centers[0]))
+        alpha_2L = (cell_centers[0] - face_positions[0]) / ((face_positions[1] - face_positions[0]) * (face_positions[1] - cell_centers[0]))
         alpha_0L = alpha_1 - alpha_2L
-        alpha_2R = -(x_c[0] - x_f[1]) / ((x_f[0] - x_f[1]) * (x_f[0] - x_c[0]))
+        alpha_2R = -(cell_centers[0] - face_positions[1]) / ((face_positions[0] - face_positions[1]) * (face_positions[0] - cell_centers[0]))
         alpha_0R = alpha_1 - alpha_2R
         fctr = ((b[0] + alpha_0L * a[0]) * (b[1] +
                     alpha_0R * a[1]) - alpha_2L * alpha_2R * a[0] * a[1])
@@ -211,14 +211,14 @@ def construct_grad_bc(shape, x_f, x_c=None, bc=(None, None), axis=0):
             [0, shape_f_t[1]-1]).reshape((1, -1, 1)) + np.arange(shape_f_t[2]).reshape((1, 1, -1))
         values_bc = np.zeros((shape_t[0], 2, shape_t[2]))
         values = np.zeros((shape_t[0], 4, shape_t[2]))
-        if (x_c is None):
-            x_c = 0.5*np.array([x_f[0] + x_f[1], x_f[1] + x_f[2], x_f[-3] + x_f[-2], x_f[-2] + x_f[-1]])
+        if (cell_centers is None):
+            cell_centers = 0.5*np.array([face_positions[0] + face_positions[1], face_positions[1] + face_positions[2], face_positions[-3] + face_positions[-2], face_positions[-2] + face_positions[-1]])
         dx_inv = np.tile(
-            1 / (x_c[1:] - x_c[:-1]).reshape((1, -1, 1)), (shape_t[0], 1, shape_t[2]))
+            1 / (cell_centers[1:] - cell_centers[:-1]).reshape((1, -1, 1)), (shape_t[0], 1, shape_t[2]))
 
-        a, b, d = unwrap_bc(shape, bc[0]) # Get a, b, and d for left bc from dictionary
-        alpha_1 = (x_c[1] - x_f[0]) / ((x_c[0] - x_f[0]) * (x_c[1] - x_c[0]))
-        alpha_2 = (x_c[0] - x_f[0]) / ((x_c[1] - x_f[0]) * (x_c[1] - x_c[0]))
+        a, b, d = unwrap_bc(shape, boundary_conditions[0]) # Get a, b, and d for left bc from dictionary
+        alpha_1 = (cell_centers[1] - face_positions[0]) / ((cell_centers[0] - face_positions[0]) * (cell_centers[1] - cell_centers[0]))
+        alpha_2 = (cell_centers[0] - face_positions[0]) / ((cell_centers[1] - face_positions[0]) * (cell_centers[1] - cell_centers[0]))
         alpha_0 = alpha_1 - alpha_2
         b = b / alpha_0
         fctr = (a + b)
@@ -233,9 +233,9 @@ def construct_grad_bc(shape, x_f, x_c=None, bc=(None, None), axis=0):
         values[:, 1, :] = -b_fctr * alpha_2
         values_bc[:, 0, :] = -d_fctr
 
-        a, b, d = unwrap_bc(shape, bc[1]) # Get a, b, and d for right bc from dictionary
-        alpha_1 = -(x_c[-2] - x_f[-1]) / ((x_c[-1] - x_f[-1]) * (x_c[-2] - x_c[-1]))
-        alpha_2 = -(x_c[-1] - x_f[-1]) / ((x_c[-2] - x_f[-1]) * (x_c[-2] - x_c[-1]))
+        a, b, d = unwrap_bc(shape, boundary_conditions[1]) # Get a, b, and d for right bc from dictionary
+        alpha_1 = -(cell_centers[-2] - face_positions[-1]) / ((cell_centers[-1] - face_positions[-1]) * (cell_centers[-2] - cell_centers[-1]))
+        alpha_2 = -(cell_centers[-1] - face_positions[-1]) / ((cell_centers[-2] - face_positions[-1]) * (cell_centers[-2] - cell_centers[-1]))
         alpha_0 = alpha_1 - alpha_2
         b = b / alpha_0
         fctr = (a + b)
@@ -250,13 +250,13 @@ def construct_grad_bc(shape, x_f, x_c=None, bc=(None, None), axis=0):
         values[:, -1, :] = -b_fctr * alpha_1
         values_bc[:, -1, :] = d_fctr
 
-    Grad = csc_array((values.ravel(), (i_f.ravel(), i_c.ravel())), 
+    grad_matrix = csc_array((values.ravel(), (i_f.ravel(), i_c.ravel())), 
                       shape=(math.prod(shape_f_t), math.prod(shape_t)))
     grad_bc = csc_array((values_bc.ravel(), i_f_bc.ravel(), [
                          0, i_f_bc.size]), shape=(math.prod(shape_f_t),1))
-    return Grad, grad_bc
+    return grad_matrix, grad_bc
 
-def construct_diff_flux(shape, A_grad, b_grad, param, axis=0):
+def construct_diff_flux(shape, grad_matrix, grad_bc, parameters, axis=0):
     """
     Computes the diffusion fluxes in sparse format
     
@@ -264,9 +264,9 @@ def construct_diff_flux(shape, A_grad, b_grad, param, axis=0):
     ----------  
         axis (int, optional): Dimension to construct the gradient matrix for. Default is 0.
         shape:  shape (tuple): shape of the domain.
-        A_grad: sparse matrix containing the homogeneous terms of the discretized gradient operator
-        b_grad: sparse vector containing the heterogeneous terms resulting from the boundary conditions
-        param:  a dictionary that should contain the key 'Diff' where the diffusion coefficients
+        grad_matrix: sparse matrix containing the homogeneous terms of the discretized gradient operator
+        grad_bc: sparse vector containing the heterogeneous terms resulting from the boundary conditions
+        parameters:  a dictionary that should contain the key 'Diff' where the diffusion coefficients
                 are stored, that can be a constant, a diagonal vector of length Nc, or an Nc x Nc matrix
     
     Returns
@@ -278,7 +278,7 @@ def construct_diff_flux(shape, A_grad, b_grad, param, axis=0):
     Example
     -------
         The command to obtain the diffusion fluxes in the x-direction is:
-        A_diff_x, b_diff_x = diff_flux(shape, sz, A_grad, b_grad, axis=0, **param)
+        A_diff_x, b_diff_x = diff_flux(shape, sz, grad_matrix, grad_bc, axis=0, **parameters)
         
     created by: M. van Sint Annaland
     modified by: M. Galanti
@@ -293,33 +293,33 @@ def construct_diff_flux(shape, A_grad, b_grad, param, axis=0):
     nc = shape[-1]
     ntotf = np.prod(sf[0:-1])
 
-    if isinstance(param['Diff'], float):
-        A_diff = -param['Diff']*A_grad
-        b_diff = -param['Diff']*b_grad
-    elif isinstance(param['Diff'][axis-1], float):
-        Diff = np.asarray(param['Diff'])*np.eye(nc)
+    if isinstance(parameters['Diff'], float):
+        A_diff = -parameters['Diff']*grad_matrix
+        b_diff = -parameters['Diff']*grad_bc
+    elif isinstance(parameters['Diff'][axis-1], float):
+        Diff = np.asarray(parameters['Diff'])*np.eye(nc)
         Diff_mat_x = block_diag([Diff]*ntotf, format='csc')
-        A_diff = -Diff_mat_x @ A_grad
-        b_diff = -Diff_mat_x @ b_grad
+        A_diff = -Diff_mat_x @ grad_matrix
+        b_diff = -Diff_mat_x @ grad_bc
     else:
-        Diff_mat_x = block_diag([param['Diff']]*ntotf, format='csc')
-        A_diff = -Diff_mat_x @ A_grad
-        b_diff = -Diff_mat_x @ b_grad
+        Diff_mat_x = block_diag([parameters['Diff']]*ntotf, format='csc')
+        A_diff = -Diff_mat_x @ grad_matrix
+        b_diff = -Diff_mat_x @ grad_bc
 
     return A_diff, b_diff
 
-def construct_div(shape, x_f, nu=0, axis=0):
+def construct_div(shape, face_positions, nu=0, axis=0):
     """
-    Construct the Div matrix based on the given parameters.
+    Construct the div_mat matrix based on the given parameters.
 
     Args:
         shape (tuple): shape of the multi-dimesional array
-        x_f (ndarray): Face positions
+        face_positions (ndarray): Face positions
         nu (int or callable): The integer representing geometry (0: flat, 1: cylindrical, 2: spherical). If it is a function it specifies an area at position x.
         axis (int): The axis along which the numerical differentiation is performed. Default is 0.
 
     Returns:
-        csc_array: The Div matrix.
+        csc_array: The div_mat matrix.
 
     """
 
@@ -330,7 +330,7 @@ def construct_div(shape, x_f, nu=0, axis=0):
     else:
         shape_f = list(shape)
         shape = tuple(shape)
-    x_f = generate_grid(shape[axis], x_f)
+    face_positions = generate_grid(shape[axis], face_positions)
     if (axis<0):
         axis += len(shape)
     shape_t = [math.prod(shape_f[0:axis]), math.prod(
@@ -348,21 +348,21 @@ def construct_div(shape, x_f, nu=0, axis=0):
     )
 
     if callable(nu):
-        area = nu(x_f).ravel()
+        area = nu(face_positions).ravel()
         inv_sqrt3 = 1 / np.sqrt(3)
-        x_f_r = x_f.ravel()
-        dx_f = x_f_r[1:] - x_f_r[:-1]
+        face_positions_r = face_positions.ravel()
+        dx_f = face_positions_r[1:] - face_positions_r[:-1]
         dvol_inv = 1 / (
-            (nu(x_f_r[:-1] + (0.5 - 0.5 * inv_sqrt3) * dx_f)
-             + nu(x_f_r[:-1] + (0.5 + 0.5 * inv_sqrt3) * dx_f))
+            (nu(face_positions_r[:-1] + (0.5 - 0.5 * inv_sqrt3) * dx_f)
+             + nu(face_positions_r[:-1] + (0.5 + 0.5 * inv_sqrt3) * dx_f))
             * 0.5 * dx_f
         )
     elif nu == 0:
         area = np.ones(shape_f_t[1])
-        dvol_inv = 1 / (x_f[1:] - x_f[:-1])
+        dvol_inv = 1 / (face_positions[1:] - face_positions[:-1])
     else:
-        area = np.power(x_f.ravel(), nu)
-        vol = area * x_f.ravel() / (nu + 1)
+        area = np.power(face_positions.ravel(), nu)
+        vol = area * face_positions.ravel() / (nu + 1)
         dvol_inv = 1 / (vol[1:] - vol[:-1])
 
     values = np.empty((shape_t[1],2))
@@ -371,55 +371,55 @@ def construct_div(shape, x_f, nu=0, axis=0):
     values = np.tile(values.reshape((1,-1,1,2)),(shape_t[0],1,shape_t[2]))
 
     num_cells = np.prod(shape_t, dtype=int);
-    Div = csc_array(
+    div_matrix = csc_array(
         (values.ravel(),(np.repeat(np.arange(num_cells),2) , 
                            i_f.ravel())),
         shape=(num_cells, np.prod(shape_f_t, dtype=int))
     )
-    Div.sort_indices()
-    return Div
+    div_matrix.sort_indices()
+    return div_matrix
 
-def construct_convflux_upwind(shape, x_f, x_c=None, bc=(None,None), v=1.0, axis=0):
+def construct_convflux_upwind(shape, face_positions, cell_centers=None, boundary_conditions=(None,None), velocity=1.0, axis=0):
     """
-    Construct the Conv and conv_bc matrices based on the given parameters.
+    Construct the conv_matrix and conv_bc matrices based on the given parameters.
 
     Args:
         shape (tuple): shape of the multi-dimensional array.
-        x_f (ndarray): Face positions.
-        x_c (ndarray, optional): Cell positions. If not provided, it will be calculated based on the face array.
-        bc (list, optional): The boundary conditions. Default is None.
-        v (ndarray): Velocities on face positions
+        face_positions (ndarray): Face positions.
+        cell_centers (ndarray, optional): Cell positions. If not provided, it will be calculated based on the face array.
+        boundary_conditions (list, optional): The boundary conditions. Default is None.
+        velocity (ndarray): Velocities on face positions
         axis (int, optional): The axis along which the convection takes place is performed. Default is 0.
 
     Returns:
-        csc_array: The Conv matrix.
+        csc_array: The conv_matrix matrix.
         csc_array: The conv_bc matrix.
     """
     if (isinstance(shape, int)):
         shape = (shape,)
-    x_f, x_c = generate_grid(shape[axis], x_f, x_c, generate_x_c = True)
+    face_positions, cell_centers = generate_grid(shape[axis], face_positions, cell_centers, generate_x_c = True)
     
-    Conv = construct_convflux_upwind_int(shape, v, axis)
-    if (bc == None or bc == (None,None)):
+    conv_matrix = construct_convflux_upwind_int(shape, velocity, axis)
+    if (boundary_conditions == None or boundary_conditions == (None,None)):
         shape_f = shape.copy()
         shape_f[axis] +=1
         conv_bc = csc_array(shape=(math.prod(shape_f),1))
     else:
-        Conv_bc, conv_bc = construct_convflux_upwind_bc(shape, x_f, x_c, bc, v, axis)
-        Conv += Conv_bc
-    return Conv, conv_bc
+        conv_matrix_bc, conv_bc = construct_convflux_upwind_bc(shape, face_positions, cell_centers, boundary_conditions, velocity, axis)
+        conv_matrix += conv_matrix_bc
+    return conv_matrix, conv_bc
 
-def construct_convflux_upwind_int(shape, v=1.0, axis=0):
+def construct_convflux_upwind_int(shape, velocity=1.0, axis=0):
     """
-    Construct the Conv matrix for internal faces, e.g. all faces except these on the boundaries
+    Construct the conv_matrix matrix for internal faces, e.g. all faces except these on the boundaries
 
     Args:
         shape (tuple): shape of the ndarrays.
-        v (ndarray): The velocity array.
+        velocity (ndarray): The velocity array.
         axis (int, optional): The axis along which the numerical differentiation is performed. Default is 0.
 
     Returns:
-        csc_array: The Conv matrix.
+        csc_array: The conv_matrix matrix.
 
     """
     if not isinstance(shape, (list, tuple)):
@@ -435,33 +435,33 @@ def construct_convflux_upwind_int(shape, v=1.0, axis=0):
     shape_f_t = shape_t.copy()
     shape_f_t[1] = shape_t[1] + 1
 
-    v = np.array(v) + np.zeros(shape_f)
-    v = v.reshape(shape_f_t)
-    fltr_v_pos = (v > 0)
+    velocity = np.array(velocity) + np.zeros(shape_f)
+    velocity = velocity.reshape(shape_f_t)
+    fltr_v_pos = (velocity > 0)
     i_f = (shape_t[1]+1) * shape_t[2] * np.arange(shape_t[0]).reshape(-1, 1, 1) + shape_t[2] * np.arange(1,shape_t[1]).reshape((
         1, -1, 1)) + np.arange(shape_t[2]).reshape((1, 1, -1))
     i_c = shape_t[1] * shape_t[2] * np.arange(shape_t[0]).reshape((-1, 1, 1)) + shape_t[2] * np.arange(1,shape_t[1]).reshape((
         1, -1, 1)) + np.arange(shape_t[2]).reshape((1, 1, -1))
     i_c = i_c - shape_t[2] * fltr_v_pos[:, 1:-1, :]
-    Conv = csc_array((v[:, 1:-1, :].ravel(), (i_f.ravel(), i_c.ravel())), shape=(
+    conv_matrix = csc_array((velocity[:, 1:-1, :].ravel(), (i_f.ravel(), i_c.ravel())), shape=(
         math.prod(shape_f_t), math.prod(shape_t)))
-    Conv.sort_indices()
-    return Conv
+    conv_matrix.sort_indices()
+    return conv_matrix
     
-def construct_convflux_upwind_bc(shape, x_f, x_c = None, bc=(None,None), v=1.0, axis=0):
+def construct_convflux_upwind_bc(shape, face_positions, cell_centers = None, boundary_conditions=(None,None), velocity=1.0, axis=0):
     """
-    Construct the Conv and conv_bc matrices for the boundary faces only
+    Construct the conv_matrix and conv_bc matrices for the boundary faces only
 
     Args:
         shape (tuple): shape of the multidimensional array.
-        x_c (ndarray, optional): Cell-centered positions. If not provided, it will be calculated based on the face array.
-        x_f (ndarray): Face positions
-        bc (tuple, optional): A tuple containting the left and right boundary conditions. Default is None.
-        v (ndarray): The velocity array.
+        cell_centers (ndarray, optional): Cell-centered positions. If not provided, it will be calculated based on the face array.
+        face_positions (ndarray): Face positions
+        boundary_conditions (tuple, optional): A tuple containting the left and right boundary conditions. Default is None.
+        velocity (ndarray): The velocity array.
         axis (int, optional): The axis along which the numerical differentiation is performed. Default is 0.
 
     Returns:
-        csc_array: The Conv matrix.
+        csc_array: The conv_matrix matrix.
         csc_array: The conv_bc matrix.
 
     """
@@ -485,26 +485,26 @@ def construct_convflux_upwind_bc(shape, x_f, x_c = None, bc=(None,None), v=1.0, 
     shape_bc[axis] = 1
     shape_bc_d = [shape_t[0], shape_t[2]]
 
-    v = np.array(v) + np.zeros(shape_f)
-    v = v.reshape(shape_f_t)
-    fltr_v_pos = (v > 0)
+    velocity = np.array(velocity) + np.zeros(shape_f)
+    velocity = velocity.reshape(shape_f_t)
+    fltr_v_pos = (velocity > 0)
 
     # Handle special case with one cell in the dimension axis
     if (shape_t[1] == 1):
         a, b, d = [None]*2, [None]*2, [None]*2
-        a[0], b[0], d[0] = unwrap_bc(shape, bc[0])
-        a[1], b[1], d[1] = unwrap_bc(shape, bc[1])
-        if (x_c is None):
-            x_c = 0.5*(x_f[0:-1] + x_f[1:])
+        a[0], b[0], d[0] = unwrap_bc(shape, boundary_conditions[0])
+        a[1], b[1], d[1] = unwrap_bc(shape, boundary_conditions[1])
+        if (cell_centers is None):
+            cell_centers = 0.5*(face_positions[0:-1] + face_positions[1:])
         i_c = shape_t[2] * np.arange(shape_t[0]).reshape((-1, 1, 1)) + np.array(
             (0, 0)).reshape((1, -1, 1)) + np.arange(shape_t[2]).reshape((1, 1, -1))
         i_f = shape_t[2] * np.arange(shape_t[0]).reshape((-1, 1, 1)) + shape_t[2] * np.array([0,1]).reshape((
             1, -1, 1)) + np.arange(shape_t[2]).reshape((1, 1, -1))
         values = np.zeros(shape_f_t)
-        alpha_1 = (x_f[1] - x_f[0]) / ((x_c[0] - x_f[0]) * (x_f[1] - x_c[0]))
-        alpha_2L = (x_c[0] - x_f[0]) / ((x_f[1] - x_f[0]) * (x_f[1] - x_c[0]))
+        alpha_1 = (face_positions[1] - face_positions[0]) / ((cell_centers[0] - face_positions[0]) * (face_positions[1] - cell_centers[0]))
+        alpha_2L = (cell_centers[0] - face_positions[0]) / ((face_positions[1] - face_positions[0]) * (face_positions[1] - cell_centers[0]))
         alpha_0L = alpha_1 - alpha_2L
-        alpha_2R = -(x_c[0] - x_f[1]) / ((x_f[0] - x_f[1]) * (x_f[0] - x_c[0]))
+        alpha_2R = -(cell_centers[0] - face_positions[1]) / ((face_positions[0] - face_positions[1]) * (face_positions[0] - cell_centers[0]))
         alpha_0R = alpha_1 - alpha_2R        
         fctr = ((b[0] + alpha_0L * a[0]) * (b[1] +
                      alpha_0R * a[1]) - alpha_2L * alpha_2R * a[0] * a[1])
@@ -514,8 +514,8 @@ def construct_convflux_upwind_bc(shape, x_f, x_c = None, bc=(None,None), v=1.0, 
                            * fctr + np.zeros(shape)).reshape(shape_bc_d))
         values[:, 1, :] = ((alpha_1 * a[1] * (a[0] * (alpha_0L - alpha_2R) + b[0])
                            * fctr + np.zeros(shape)).reshape(shape_bc_d))
-        values = values * v
-        Conv = csc_array((values.ravel(), (i_f.ravel(), i_c.ravel())), shape=(math.prod(shape_f_t), math.prod(shape_t)))        
+        values = values * velocity
+        conv_matrix = csc_array((values.ravel(), (i_f.ravel(), i_c.ravel())), shape=(math.prod(shape_f_t), math.prod(shape_t)))        
         
         i_f_bc = shape_f_t[1] * shape_f_t[2] * np.arange(shape_f_t[0]).reshape((-1, 1, 1)) + shape_f_t[2] * np.array(
             [0, shape_f_t[1]-1]).reshape((1, -1, 1)) + np.arange(shape_f_t[2]).reshape((1, 1, -1))
@@ -525,7 +525,7 @@ def construct_convflux_upwind_bc(shape, x_f, x_c = None, bc=(None,None), v=1.0, 
                               * fctr + np.zeros(shape_bc)).reshape(shape_bc_d))
         values_bc[:, 1, :] = ((((a[0] * alpha_0L + b[0]) * d[1] - alpha_2R * a[1] * d[0])
                               * fctr + np.zeros(shape_bc)).reshape(shape_bc_d))
-        values_bc = values_bc * v
+        values_bc = values_bc * velocity
     else:
         i_c = shape_t[1] * shape_t[2] * np.arange(shape_t[0]).reshape(-1, 1, 1) + shape_t[2] * np.array([0,1,shape_t[1]-2, shape_t[1]-1]).reshape((
             1, -1, 1)) + np.arange(shape_t[2]).reshape((1, 1, -1))
@@ -535,12 +535,12 @@ def construct_convflux_upwind_bc(shape, x_f, x_c = None, bc=(None,None), v=1.0, 
             [0, shape_f_t[1]-1]).reshape((1, -1, 1)) + np.arange(shape_f_t[2]).reshape((1, 1, -1))
         values_bc = np.zeros((shape_t[0], 2, shape_t[2]))
         values = np.zeros((shape_t[0], 4, shape_t[2]))
-        if (x_c is None):
-            x_c = 0.5*np.array([x_f[0] + x_f[1], x_f[1] + x_f[2], x_f[-3] + x_f[-2], x_f[-2] + x_f[-1]])
+        if (cell_centers is None):
+            cell_centers = 0.5*np.array([face_positions[0] + face_positions[1], face_positions[1] + face_positions[2], face_positions[-3] + face_positions[-2], face_positions[-2] + face_positions[-1]])
 
-        a, b, d = unwrap_bc(shape, bc[0]) # Get a, b, and d for left bc from dictionary
-        alpha_1 = (x_c[1] - x_f[0]) / ((x_c[0] - x_f[0]) * (x_c[1] - x_c[0]))
-        alpha_2 = (x_c[0] - x_f[0]) / ((x_c[1] - x_f[0]) * (x_c[1] - x_c[0]))
+        a, b, d = unwrap_bc(shape, boundary_conditions[0]) # Get a, b, and d for left bc from dictionary
+        alpha_1 = (cell_centers[1] - face_positions[0]) / ((cell_centers[0] - face_positions[0]) * (cell_centers[1] - cell_centers[0]))
+        alpha_2 = (cell_centers[0] - face_positions[0]) / ((cell_centers[1] - face_positions[0]) * (cell_centers[1] - cell_centers[0]))
         alpha_0 = alpha_1 - alpha_2
         fctr = (alpha_0 * a + b)
         np.divide(1, fctr, out=fctr, where=(fctr != 0))
@@ -550,13 +550,13 @@ def construct_convflux_upwind_bc(shape, x_f, x_c = None, bc=(None,None), v=1.0, 
         d_fctr = d * fctr
         d_fctr = d_fctr + np.zeros(shape_bc)
         d_fctr = np.reshape(d_fctr, shape_bc_d)
-        values[:, 0, :] = (a_fctr * alpha_1) * v[:, 0, :]
-        values[:, 1, :] = -a_fctr * alpha_2 * v[:, 0, :]
-        values_bc[:, 0, :] = d_fctr * v[:, 0, :]
+        values[:, 0, :] = (a_fctr * alpha_1) * velocity[:, 0, :]
+        values[:, 1, :] = -a_fctr * alpha_2 * velocity[:, 0, :]
+        values_bc[:, 0, :] = d_fctr * velocity[:, 0, :]
 
-        a, b, d = unwrap_bc(shape, bc[1]) # Get a, b, and d for right bc from dictionary
-        alpha_1 = -(x_c[-2] - x_f[-1]) / ((x_c[-1] - x_f[-1]) * (x_c[-2] - x_c[-1]))
-        alpha_2 = -(x_c[-1] - x_f[-1]) / ((x_c[-2] - x_f[-1]) * (x_c[-2] - x_c[-1]))
+        a, b, d = unwrap_bc(shape, boundary_conditions[1]) # Get a, b, and d for right bc from dictionary
+        alpha_1 = -(cell_centers[-2] - face_positions[-1]) / ((cell_centers[-1] - face_positions[-1]) * (cell_centers[-2] - cell_centers[-1]))
+        alpha_2 = -(cell_centers[-1] - face_positions[-1]) / ((cell_centers[-2] - face_positions[-1]) * (cell_centers[-2] - cell_centers[-1]))
         alpha_0 = alpha_1 - alpha_2
         fctr = (alpha_0 * a + b)
         np.divide(1, fctr, out=fctr, where=(fctr != 0))
@@ -566,58 +566,58 @@ def construct_convflux_upwind_bc(shape, x_f, x_c = None, bc=(None,None), v=1.0, 
         d_fctr = d * fctr
         d_fctr = d_fctr + np.zeros(shape_bc)
         d_fctr = np.reshape(d_fctr, shape_bc_d)
-        values[:, -1, :] = (a_fctr * alpha_1) * v[:, -1, :]
-        values[:, -2, :] = -a_fctr * alpha_2 * v[:, -1, :]
-        values_bc[:, -1, :] = d_fctr * v[:, -1, :]
-        Conv = csc_array((values.ravel(), (i_f.ravel(), i_c.ravel())), shape=(
+        values[:, -1, :] = (a_fctr * alpha_1) * velocity[:, -1, :]
+        values[:, -2, :] = -a_fctr * alpha_2 * velocity[:, -1, :]
+        values_bc[:, -1, :] = d_fctr * velocity[:, -1, :]
+        conv_matrix = csc_array((values.ravel(), (i_f.ravel(), i_c.ravel())), shape=(
             math.prod(shape_f_t), math.prod(shape_t)))
-        Conv.sort_indices()
+        conv_matrix.sort_indices()
 
     conv_bc = csc_array((values_bc.ravel(), i_f_bc.ravel(), [
                          0, i_f_bc.size]), shape=(math.prod(shape_f_t),1))
-    return Conv, conv_bc
+    return conv_matrix, conv_bc
 
-def construct_coefficient_matrix(coeffs, shape=None, axis=None):
+def construct_coefficient_matrix(coefficients, shape=None, axis=None):
     """
     Construct a diagional matrix with coefficients on its diagonal.
     This is useful to create a matrix containing transport coefficients 
     from a field contained in a ndarray. 
 
     Args:
-        coeffs (ndarray, list): values of the coefficients in a field
-        shape (tuple, optional): Shape of the multidimensional field. With this option, some of the dimensions of coeffs can be choosen singleton.
+        coefficients (ndarray, list): values of the coefficients in a field
+        shape (tuple, optional): Shape of the multidimensional field. With this option, some of the dimensions of coefficients can be choosen singleton.
         axis (int, optional): In case of broadcasting along 'axis' used shape will be shape[axis+1] (can be useful for face-values)
 
     Returns:
         csc_array: matrix Coeff with coefficients on its diagonal.
     """
     if(shape == None):
-        shape = coeffs.shape
-        Coeff = csc_array(diags(coeffs.flatten(), format='csc'))
+        shape = coefficients.shape
+        Coeff = csc_array(diags(coefficients.flatten(), format='csc'))
     else:
         shape = list(shape)
         if (axis != None):
             shape[axis] += 1
-        coeffs_copy = np.array(coeffs)
-        reps = [shape[i] // coeffs_copy.shape[i] if i < len(coeffs_copy.shape) else shape[i] for i in range(len(shape))]
-        coeffs_copy = np.tile(coeffs_copy, reps)
-        Coeff = csc_array(diags(coeffs_copy.flatten(), format='csc'))
+        coefficients_copy = np.array(coefficients)
+        reps = [shape[i] // coefficients_copy.shape[i] if i < len(coefficients_copy.shape) else shape[i] for i in range(len(shape))]
+        coefficients_copy = np.tile(coefficients_copy, reps)
+        Coeff = csc_array(diags(coefficients_copy.flatten(), format='csc'))
     return Coeff
 
-def numjac_local(f, c, eps_jac=1e-6, axis=-1):
+def numjac_local(function, initial_values, epsilon_jac=1e-6, axis=-1):
     """
     Compute the local numerical Jacobian matrix and function values for the given function and initial values.
     
-    The function 'f' is assumed to be local, meaning it can be dependent on other components in the array along the 'axis' dimension.
+    The function 'function' is assumed to be local, meaning it can be dependent on other components in the array along the 'axis' dimension.
     numjac_local can be used to compute Jacobians of functions like reaction, accumulation, or mass transfer terms, where there 
     is a dependence only on local components in a spatial cell.
     The best choice is to set up the problem such that 'axis' is the last dimension of the multidimensional array, 
     as this will result in a nicely block-structured Jacobian matrix.
 
     Args:
-        f (callable): The function for which to compute the Jacobian.
-        c (ndarray): The value at which the Jacobian should be evaluated.
-        eps_jac (float, optional): The perturbation value for computing the Jacobian. Defaults to 1e-6.
+        function (callable): The function for which to compute the Jacobian.
+        initial_values (ndarray): The value at which the Jacobian should be evaluated.
+        epsilon_jac (float, optional): The perturbation value for computing the Jacobian. Defaults to 1e-6.
         axis (int or tuple/list, optional): The axis or axes along which components are mutually coupled. Default is -1.
 
     Returns:
@@ -625,7 +625,7 @@ def numjac_local(f, c, eps_jac=1e-6, axis=-1):
         ndarray: The function values.
 
     """
-    shape = c.shape
+    shape = initial_values.shape
     if isinstance(axis, int):
         axis = (axis,)
     axis = [a + len(shape) if a < 0 else a for a in axis]  # Normalize negative indices
@@ -636,35 +636,35 @@ def numjac_local(f, c, eps_jac=1e-6, axis=-1):
     values = np.zeros((*shape_t, shape_t[1]))
     i = shape_t[1] * shape_t[2] * np.arange(shape_t[0]).reshape((-1, 1, 1, 1)) + np.zeros((1, shape_t[1], 1, 1)) + np.arange(
     shape_t[2]).reshape((1, 1, -1, 1)) + shape_t[2] * np.arange(shape_t[1]).reshape((1, 1, 1, -1))
-    f_value = f(c,).reshape(shape_t)
-    c = c.reshape(shape_t)
-    dc = -eps_jac * np.abs(c)  # relative deviation
-    dc[dc > (-eps_jac)] = eps_jac  # If dc is small use absolute deviation
-    dc = (c + dc) - c
+    function_value = function(initial_values,).reshape(shape_t)
+    initial_values = initial_values.reshape(shape_t)
+    dc = -epsilon_jac * np.abs(initial_values)  # relative deviation
+    dc[dc > (-epsilon_jac)] = epsilon_jac  # If dc is small use absolute deviation
+    dc = (initial_values + dc) - initial_values
     for k in range(shape_t[1]):
-        c_perturb = np.copy(c)
-        c_perturb[:, k, :] = c_perturb[:, k, :] + dc[:, k, :]
-        f_perturb = f(c_perturb.reshape(shape)).reshape(shape_t)
-        values[:, k, :, :] = np.transpose((f_perturb - f_value) / dc[:, [k], :],(0,2,1))
+        initial_values_perturb = np.copy(initial_values)
+        initial_values_perturb[:, k, :] = initial_values_perturb[:, k, :] + dc[:, k, :]
+        function_perturb = function(initial_values_perturb.reshape(shape)).reshape(shape_t)
+        values[:, k, :, :] = np.transpose((function_perturb - function_value) / dc[:, [k], :],(0,2,1))
     Jac = csc_array((values.flatten(), i.flatten(), np.arange(
         0, i.size + shape_t[1], shape_t[1])), shape=(np.prod(shape_t), np.prod(shape_t)))
-    return f_value.reshape(shape), Jac
+    return function_value.reshape(shape), Jac
 
-def newton(func, x0, args=(), tol=1.49012e-08, maxfev=100, solver=None, callback=None):
+def newton(function, initial_guess, args=(), tolerance=1.49012e-08, max_iterations=100, solver=None, callback=None):
     """
-    Performs a Newton-Raphson iterations to seek the root of the vector valued function func(x0)
+    Performs a Newton-Raphson iterations to seek the root of the vector valued function function(initial_guess)
 
     Parameters
     ---------- 
-    func : callable `function func(x, *args)`
+    function : callable `function function(x, *args)`
         function that provides the vector valued function 'g' of which the roots are sought and, as second argument, its Jacobian
-    x0 : `numpy.ndarray`
+    initial_guess : `numpy.ndarray`
         vector containing the initial guesses for the values of x
     args : `tuple`, extra arguments
-        Extra arguments passed to func
-    tol : `float`, optional 
+        Extra arguments passed to function
+    tolerance : `float`, optional 
         tolerance used for convergence in the Newton-Raphson iteration, default = 1e-6
-    maxfev : `int`, optional
+    max_iterations : `int`, optional
         maximum number of iterations used in Newton-Raphson procedure, default = 100
     solver : `str`, optional 
         the method to solve the linearized equations, default = 'bicgstab'
@@ -689,7 +689,7 @@ def newton(func, x0, args=(), tol=1.49012e-08, maxfev=100, solver=None, callback
     date: April 2024
     """
 
-    n = x0.size
+    n = initial_guess.size
     if (solver is None):
         if (n<50000):
             solver = 'spsolve'
@@ -725,15 +725,15 @@ def newton(func, x0, args=(), tol=1.49012e-08, maxfev=100, solver=None, callback
 
     converged = False
     it = 0
-    x = x0.copy()
-    while (not converged) and (it<maxfev):
+    x = initial_guess.copy()
+    while (not converged) and (it<max_iterations):
         it += 1
-        g, Jac = func(x, *args)
+        g, Jac = function(x, *args)
         g = g.reshape((-1,1))
         dx_neg = linsolver(Jac, g)
         defect = norm(dx_neg[:], ord=np.inf)
         x -= dx_neg.reshape(x.shape)
-        converged = (defect<tol)
+        converged = (defect<tolerance)
         if callback:
             callback(x, g)
 
@@ -746,72 +746,72 @@ def newton(func, x0, args=(), tol=1.49012e-08, maxfev=100, solver=None, callback
         'x': x,
         'success': converged,
         'message': message,
-        'fun': g.reshape(x0.shape),
+        'fun': g.reshape(initial_guess.shape),
         'jac': Jac,
         'nit': it
     })
     return result
 
-def clip_approach(x, f, lower_bounds = 0, upper_bounds = None, factor = 0):
-    # filter x with lower and upper bounds using an approach factor
+def clip_approach(values, function, lower_bounds = 0, upper_bounds = None, factor = 0):
+    # filter values with lower and upper bounds using an approach factor
     if (factor == 0):
-        np.clip(x, lower_bounds, upper_bounds, out = x)
+        np.clip(values, lower_bounds, upper_bounds, out = values)
     else:
         if (lower_bounds != None):
-            below_lower = (x < lower_bounds)
+            below_lower = (values < lower_bounds)
             if (np.any(below_lower)):
-                broadcasted_lower_bounds = np.broadcast_to(lower_bounds, x.shape)
-                x[below_lower] = (1.0 + factor)*broadcasted_lower_bounds[below_lower] - factor*x[below_lower]
+                broadcasted_lower_bounds = np.broadcast_to(lower_bounds, values.shape)
+                values[below_lower] = (1.0 + factor)*broadcasted_lower_bounds[below_lower] - factor*values[below_lower]
         if (upper_bounds != None):
-            above_upper = (x > upper_bounds)
+            above_upper = (values > upper_bounds)
             if (np.any(above_upper)):
-                broadcasted_upper_bounds = np.broadcast_to(upper_bounds, x.shape)
-                x[above_upper] = (1.0 + factor)*broadcasted_upper_bounds[above_upper] - factor*x[above_upper]
+                broadcasted_upper_bounds = np.broadcast_to(upper_bounds, values.shape)
+                values[above_upper] = (1.0 + factor)*broadcasted_upper_bounds[above_upper] - factor*values[above_upper]
 
-def interp_stagg_to_cntr(c_f, x_f, x_c = None, axis = 0):
+def interp_stagg_to_cntr(staggered_values, face_positions, cell_centers = None, axis = 0):
     """
     Interpolate values at staggered positions to cell-centers using linear interpolation.
 
     Args:
         axis (int): Dimension that is interpolated.
-        c_f (ndarray): Quantities at staggered positions.
-        x_c (ndarray): Cell-centered positions.
-        x_f (ndarray): Positions of cell-faces (numel(x_f) = numel(x_c) + 1).
+        staggered_values (ndarray): Quantities at staggered positions.
+        cell_centers (ndarray): Cell-centered positions.
+        face_positions (ndarray): Positions of cell-faces (numel(face_positions) = numel(cell_centers) + 1).
 
     Returns:
         ndarray: Interpolated concentrations at the cell-centered positions.
 
     """
-    shape_f = list(c_f.shape)
+    shape_f = list(staggered_values.shape)
     if (axis<0):
         axis += len(shape_f)
     shape_f_t = [math.prod(shape_f[:axis]), shape_f[axis], math.prod(shape_f[axis + 1:])]  # reshape as a triplet
     shape = shape_f.copy()
     shape[axis] = shape[axis] - 1
-    c_f = np.reshape(c_f, shape_f_t)
-    if (x_c is None):
-        c_c =  0.5 * (c_f[:, 1:, :] + c_f[:, :-1, :])
+    staggered_values = np.reshape(staggered_values, shape_f_t)
+    if (cell_centers is None):
+        cell_centered_values =  0.5 * (staggered_values[:, 1:, :] + staggered_values[:, :-1, :])
     else:
-        wght = (x_c - x_f[:-1]) / (x_f[1:] - x_f[:-1])
-        c_c = c_f[:, :-1, :] + wght.reshape((1,-1,1)) * (c_f[:, 1:, :] - c_f[:, :-1, :])
-    c_c = c_c.reshape(shape)
-    return c_c
+        wght = (cell_centers - face_positions[:-1]) / (face_positions[1:] - face_positions[:-1])
+        cell_centered_values = staggered_values[:, :-1, :] + wght.reshape((1,-1,1)) * (staggered_values[:, 1:, :] - staggered_values[:, :-1, :])
+    cell_centered_values = cell_centered_values.reshape(shape)
+    return cell_centered_values
 
-def interp_cntr_to_stagg(c_c, x_f, x_c=None, axis=0):
+def interp_cntr_to_stagg(cell_centered_values, face_positions, cell_centers=None, axis=0):
     """
     Interpolate values at staggered positions to cell-centers using linear interpolation.
 
     Args:
-        c_c (ndarray): Quantities at cell-centered positions.
-        x_f (ndarray): Positions of cell-faces (numel(x_f) = numel(x_c) + 1).
-        x_c (ndarray, optional): Cell-centered positions. If not provided, the interpolated values will be averaged between adjacent staggered positions.
+        cell_centered_values (ndarray): Quantities at cell-centered positions.
+        face_positions (ndarray): Positions of cell-faces (numel(face_positions) = numel(cell_centers) + 1).
+        cell_centers (ndarray, optional): Cell-centered positions. If not provided, the interpolated values will be averaged between adjacent staggered positions.
         axis (int, optional): Dimension along which interpolation is performed. Default is 0.
 
     Returns:
         ndarray: Interpolated concentrations at staggered positions.
 
     """
-    shape = list(c_c.shape)
+    shape = list(cell_centered_values.shape)
     if (axis<0):
         axis += len(shape)
     shape_t = [math.prod(shape[:axis]), shape[axis], math.prod(shape[axis + 1:])]  # reshape as a triplet
@@ -819,30 +819,30 @@ def interp_cntr_to_stagg(c_c, x_f, x_c=None, axis=0):
     shape_f[axis] = shape[axis] + 1
     shape_f_t = shape_t.copy()
     shape_f_t[1] = shape_f[axis]
-    if (x_c is None):
-        x_c = 0.5*(x_f[:-1]+x_f[1:])
-    wght = (x_f[1:-1] - x_c[:-1]) / (x_c[1:] - x_c[:-1])
-    c_c = c_c.reshape(shape_t)
+    if (cell_centers is None):
+        cell_centers = 0.5*(face_positions[:-1]+face_positions[1:])
+    wght = (face_positions[1:-1] - cell_centers[:-1]) / (cell_centers[1:] - cell_centers[:-1])
+    cell_centered_values = cell_centered_values.reshape(shape_t)
     if (shape_t[1]==1):
-        c_f = np.tile(c_c, (1,2,1))
+        staggered_values = np.tile(cell_centered_values, (1,2,1))
     else:
-        c_f = np.empty(shape_f_t)
-        c_f[:,1:-1,:] = c_c[:, :-1, :] + wght.reshape((1,-1,1)) * (c_c[:, 1:, :] - c_c[:, :-1, :])
-        c_f[:,0,:] = (c_c[:,0,:]*(x_c[1]-x_f[0]) - c_c[:,1,:]*(x_c[0]-x_f[0]))/(x_c[1]-x_c[0])
-        c_f[:,-1,:] = (c_c[:,-1,:]*(x_f[-1]-x_c[-2]) - c_c[:,-2,:]*(x_f[-1]-x_c[-1]))/(x_c[-1]-x_c[-2])
-        c_f = c_f.reshape(shape_f)
-    return c_f
+        staggered_values = np.empty(shape_f_t)
+        staggered_values[:,1:-1,:] = cell_centered_values[:, :-1, :] + wght.reshape((1,-1,1)) * (cell_centered_values[:, 1:, :] - cell_centered_values[:, :-1, :])
+        staggered_values[:,0,:] = (cell_centered_values[:,0,:]*(cell_centers[1]-face_positions[0]) - cell_centered_values[:,1,:]*(cell_centers[0]-face_positions[0]))/(cell_centers[1]-cell_centers[0])
+        staggered_values[:,-1,:] = (cell_centered_values[:,-1,:]*(face_positions[-1]-cell_centers[-2]) - cell_centered_values[:,-2,:]*(face_positions[-1]-cell_centers[-1]))/(cell_centers[-1]-cell_centers[-2])
+        staggered_values = staggered_values.reshape(shape_f)
+    return staggered_values
 
-def interp_cntr_to_stagg_tvd(c_c, x_f, x_c=None, bc=None, v=0, tvd_limiter = None, axis=0):
+def interp_cntr_to_stagg_tvd(cell_centered_values, face_positions, cell_centers=None, boundary_conditions=None, velocity=0, tvd_limiter = None, axis=0):
     """
     Interpolate values at staggered positions to cell-centers using TVD interpolation.
 
     Args:
-        c_c (ndarray): Quantities at cell-centered positions.
-        x_f (ndarray): Positions of cell-faces (numel(x_f) = numel(x_c) + 1).
-        x_c (ndarray, optional): Cell-centered positions. If not provided, the interpolated values will be averaged between adjacent staggered positions.
-        bc  (list, optional): The boundary conditions used to extrapolate to the boundary faces
-        v   (ndarray, optional): Velocites on face positions
+        cell_centered_values (ndarray): Quantities at cell-centered positions.
+        face_positions (ndarray): Positions of cell-faces (numel(face_positions) = numel(cell_centers) + 1).
+        cell_centers (ndarray, optional): Cell-centered positions. If not provided, the interpolated values will be averaged between adjacent staggered positions.
+        boundary_conditions  (list, optional): The boundary conditions used to extrapolate to the boundary faces
+        velocity   (ndarray, optional): Velocites on face positions
         tvd_limiter (function, optional): The TVD limiter 
         axis (int, optional): Dimension along which interpolation is performed. Default is 0.
 
@@ -850,7 +850,7 @@ def interp_cntr_to_stagg_tvd(c_c, x_f, x_c=None, bc=None, v=0, tvd_limiter = Non
         ndarray: Interpolated concentrations at staggered positions.
 
     """
-    shape = list(c_c.shape)
+    shape = list(cell_centered_values.shape)
     if (axis<0):
         axis += len(shape)
     shape_t = [math.prod(shape[:axis]), shape[axis], math.prod(shape[axis + 1:])]  # reshape as a triplet
@@ -862,19 +862,19 @@ def interp_cntr_to_stagg_tvd(c_c, x_f, x_c=None, bc=None, v=0, tvd_limiter = Non
     shape_bc[axis] = 1
     shape_bc_d = [shape_t[0], shape_t[2]]
     
-    if (x_c is None):
-        x_c = 0.5*(x_f[:-1]+x_f[1:])
-    c_c = c_c.reshape(shape_t)
-    c_f = np.empty(shape_f_t)
+    if (cell_centers is None):
+        cell_centers = 0.5*(face_positions[:-1]+face_positions[1:])
+    cell_centered_values = cell_centered_values.reshape(shape_t)
+    staggered_values = np.empty(shape_f_t)
        
     if (shape_t[1] == 1):
         a, b, d = [None]*2, [None]*2, [None]*2
-        a[0], b[0], d[0] = unwrap_bc(shape, bc[0])
-        a[1], b[1], d[1] = unwrap_bc(shape, bc[1])
-        alpha_1 = (x_f[1] - x_f[0]) / ((x_c[0] - x_f[0]) * (x_f[1] - x_c[0]))
-        alpha_2L = (x_c[0] - x_f[0]) / ((x_f[1] - x_f[0]) * (x_f[1] - x_c[0]))
+        a[0], b[0], d[0] = unwrap_bc(shape, boundary_conditions[0])
+        a[1], b[1], d[1] = unwrap_bc(shape, boundary_conditions[1])
+        alpha_1 = (face_positions[1] - face_positions[0]) / ((cell_centers[0] - face_positions[0]) * (face_positions[1] - cell_centers[0]))
+        alpha_2L = (cell_centers[0] - face_positions[0]) / ((face_positions[1] - face_positions[0]) * (face_positions[1] - cell_centers[0]))
         alpha_0L = alpha_1 - alpha_2L
-        alpha_2R = -(x_c[0] - x_f[1]) / ((x_f[0] - x_f[1]) * (x_f[0] - x_c[0]))
+        alpha_2R = -(cell_centers[0] - face_positions[1]) / ((face_positions[0] - face_positions[1]) * (face_positions[0] - cell_centers[0]))
         alpha_0R = alpha_1 - alpha_2R        
         fctr = ((b[0] + alpha_0L * a[0]) * (b[1] +
                      alpha_0R * a[1]) - alpha_2L * alpha_2R * a[0] * a[1])
@@ -883,27 +883,27 @@ def interp_cntr_to_stagg_tvd(c_c, x_f, x_c=None, bc=None, v=0, tvd_limiter = Non
                            * fctr) 
         fctr_m = fctr_m + np.zeros(shape_bc)
         fctr_m = np.reshape(fctr_m, shape_bc_d)
-        c_f[:,0,:] = fctr_m*c_c[:,0,:];
+        staggered_values[:,0,:] = fctr_m*cell_centered_values[:,0,:];
         fctr_m = (alpha_1 * a[1] * (a[0] * (alpha_0L - alpha_2R) + b[0])
                            * fctr)
         fctr_m = fctr_m + np.zeros(shape_bc)
         fctr_m = np.reshape(fctr_m, shape_bc_d)      
-        c_f[:, 1, :] = fctr_m*c_c[:,0,:]
+        staggered_values[:, 1, :] = fctr_m*cell_centered_values[:,0,:]
         fctr_m = ((a[1] * alpha_0R + b[1]) * d[0] - alpha_2L * a[0] * d[1])* fctr
         fctr_m = fctr_m + np.zeros(shape_bc)
         fctr_m = np.reshape(fctr_m, shape_bc_d)     
-        c_f[:, 0, :] += fctr_m
+        staggered_values[:, 0, :] += fctr_m
         fctr_m = ((a[0] * alpha_0L + b[0]) * d[1] - alpha_2R * a[1] * d[0])* fctr
         fctr_m = fctr_m + np.zeros(shape_bc)
         fctr_m = np.reshape(fctr_m, shape_bc_d) 
-        c_f[:, 1, :] += fctr_m
-        c_f.reshape(shape_f)
-        dc_f = np.zeros(shape_f)
+        staggered_values[:, 1, :] += fctr_m
+        staggered_values.reshape(shape_f)
+        delta_staggered_values = np.zeros(shape_f)
     else:
         # bc 0
-        a, b, d = unwrap_bc(shape, bc[0])
-        alpha_1 = (x_c[1] - x_f[0]) / ((x_c[0] - x_f[0]) * (x_c[1] - x_c[0]))
-        alpha_2 = (x_c[0] - x_f[0]) / ((x_c[1] - x_f[0]) * (x_c[1] - x_c[0]))
+        a, b, d = unwrap_bc(shape, boundary_conditions[0])
+        alpha_1 = (cell_centers[1] - face_positions[0]) / ((cell_centers[0] - face_positions[0]) * (cell_centers[1] - cell_centers[0]))
+        alpha_2 = (cell_centers[0] - face_positions[0]) / ((cell_centers[1] - face_positions[0]) * (cell_centers[1] - cell_centers[0]))
         alpha_0 = alpha_1 - alpha_2
         fctr = (alpha_0 * a + b)
         np.divide(1, fctr, out=fctr, where=(fctr != 0))
@@ -913,11 +913,11 @@ def interp_cntr_to_stagg_tvd(c_c, x_f, x_c=None, bc=None, v=0, tvd_limiter = Non
         d_fctr = d * fctr
         d_fctr = d_fctr + np.zeros(shape_bc)
         d_fctr = np.reshape(d_fctr, shape_bc_d)
-        c_f[:,0,:] = (d_fctr + a_fctr*(alpha_1*c_c[:,0,:] - alpha_2*c_c[:,1,:]))
+        staggered_values[:,0,:] = (d_fctr + a_fctr*(alpha_1*cell_centered_values[:,0,:] - alpha_2*cell_centered_values[:,1,:]))
         # bc 1
-        a, b, d = unwrap_bc(shape, bc[1])
-        alpha_1 = -(x_c[-2] - x_f[-1]) / ((x_c[-1] - x_f[-1]) * (x_c[-2] - x_c[-1]))
-        alpha_2 = -(x_c[-1] - x_f[-1]) / ((x_c[-2] - x_f[-1]) * (x_c[-2] - x_c[-1]))
+        a, b, d = unwrap_bc(shape, boundary_conditions[1])
+        alpha_1 = -(cell_centers[-2] - face_positions[-1]) / ((cell_centers[-1] - face_positions[-1]) * (cell_centers[-2] - cell_centers[-1]))
+        alpha_2 = -(cell_centers[-1] - face_positions[-1]) / ((cell_centers[-2] - face_positions[-1]) * (cell_centers[-2] - cell_centers[-1]))
         alpha_0 = alpha_1 - alpha_2
         fctr = (alpha_0 * a + b)
         np.divide(1, fctr, out=fctr, where=(fctr != 0))
@@ -927,180 +927,180 @@ def interp_cntr_to_stagg_tvd(c_c, x_f, x_c=None, bc=None, v=0, tvd_limiter = Non
         d_fctr = d * fctr
         d_fctr = d_fctr + np.zeros(shape_bc)
         d_fctr = np.reshape(d_fctr, shape_bc_d)
-        c_f[:,-1,:] = (d_fctr + a_fctr*(alpha_1*c_c[:,-1,:] - alpha_2*c_c[:,-2,:]))
+        staggered_values[:,-1,:] = (d_fctr + a_fctr*(alpha_1*cell_centered_values[:,-1,:] - alpha_2*cell_centered_values[:,-2,:]))
         
-        v = np.array(v) + np.zeros(shape_f)
-        v = v.reshape(shape_f_t)
-        fltr_v_pos = (v > 0)
+        velocity = np.array(velocity) + np.zeros(shape_f)
+        velocity = velocity.reshape(shape_f_t)
+        fltr_v_pos = (velocity > 0)
         
-        x_f = x_f.reshape((1,-1,1))
-        x_c = x_c.reshape((1,-1,1))
-        x_d = x_f[:,1:-1,:]
-        x_C = fltr_v_pos[:,1:-1,:]*x_c[:,:-1,:] + ~fltr_v_pos[:,1:-1,:]*x_c[:,1:,:]
-        x_U = fltr_v_pos[:,1:-1,:]*np.concatenate((x_f[:,0:1,:],x_c[:,0:-2,:]),axis=1) + ~fltr_v_pos[:,1:-1,:]*np.concatenate((x_c[:,2:,:], x_f[:,-1:,:]),axis=1)
-        x_D = fltr_v_pos[:,1:-1,:]*x_c[:,1:,:] + ~fltr_v_pos[:,1:-1,:]*x_c[:,:-1,:]
+        face_positions = face_positions.reshape((1,-1,1))
+        cell_centers = cell_centers.reshape((1,-1,1))
+        x_d = face_positions[:,1:-1,:]
+        x_C = fltr_v_pos[:,1:-1,:]*cell_centers[:,:-1,:] + ~fltr_v_pos[:,1:-1,:]*cell_centers[:,1:,:]
+        x_U = fltr_v_pos[:,1:-1,:]*np.concatenate((face_positions[:,0:1,:],cell_centers[:,0:-2,:]),axis=1) + ~fltr_v_pos[:,1:-1,:]*np.concatenate((cell_centers[:,2:,:], face_positions[:,-1:,:]),axis=1)
+        x_D = fltr_v_pos[:,1:-1,:]*cell_centers[:,1:,:] + ~fltr_v_pos[:,1:-1,:]*cell_centers[:,:-1,:]
         x_norm_C = (x_C-x_U)/(x_D-x_U)
         x_norm_d = (x_d-x_U)/(x_D-x_U)
-        c_C = fltr_v_pos[:,1:-1,:]*c_c[:,:-1,:] + ~fltr_v_pos[:,1:-1,:]*c_c[:,1:,:]
-        c_U = fltr_v_pos[:,1:-1,:]*np.concatenate((c_f[:,0:1,:],c_c[:,0:-2,:]),axis=1) + ~fltr_v_pos[:,1:-1,:]*np.concatenate((c_c[:,2:,:], c_f[:,-1:,:]),axis=1)
-        c_D = fltr_v_pos[:,1:-1,:]*c_c[:,1:,:] + ~fltr_v_pos[:,1:-1,:]*c_c[:,:-1,:];
+        c_C = fltr_v_pos[:,1:-1,:]*cell_centered_values[:,:-1,:] + ~fltr_v_pos[:,1:-1,:]*cell_centered_values[:,1:,:]
+        c_U = fltr_v_pos[:,1:-1,:]*np.concatenate((staggered_values[:,0:1,:],cell_centered_values[:,0:-2,:]),axis=1) + ~fltr_v_pos[:,1:-1,:]*np.concatenate((cell_centered_values[:,2:,:], staggered_values[:,-1:,:]),axis=1)
+        c_D = fltr_v_pos[:,1:-1,:]*cell_centered_values[:,1:,:] + ~fltr_v_pos[:,1:-1,:]*cell_centered_values[:,:-1,:];
         c_norm_C = np.zeros_like(c_C);
         dc_DU = (c_D-c_U);
         np.divide((c_C-c_U), dc_DU, out=c_norm_C, where=(dc_DU != 0))
-        c_f = np.concatenate((c_f[:,0:1,:], c_C, c_f[:,-1:,:]),axis=1)
+        staggered_values = np.concatenate((staggered_values[:,0:1,:], c_C, staggered_values[:,-1:,:]),axis=1)
         if (tvd_limiter == None):
-            dc_f = np.zeros(shape_f)    
-            c_f = c_f.reshape(shape_f)
+            delta_staggered_values = np.zeros(shape_f)    
+            staggered_values = staggered_values.reshape(shape_f)
         else:
-            dc_f = np.zeros(shape_f_t)
-            dc_f[:,1:-1,:] = tvd_limiter(c_norm_C, x_norm_C, x_norm_d) * dc_DU
-            c_f += dc_f
-            dc_f = dc_f.reshape(shape_f)
-            c_f = c_f.reshape(shape_f)
-    return c_f, dc_f
+            delta_staggered_values = np.zeros(shape_f_t)
+            delta_staggered_values[:,1:-1,:] = tvd_limiter(c_norm_C, x_norm_C, x_norm_d) * dc_DU
+            staggered_values += delta_staggered_values
+            delta_staggered_values = delta_staggered_values.reshape(shape_f)
+            staggered_values = staggered_values.reshape(shape_f)
+    return staggered_values, delta_staggered_values
 
-def upwind(c_norm_C, x_norm_C, x_norm_d):
+def upwind(normalized_concentration_center, normalized_position_center, normalized_position_downwind):
     """
     Apply the upwind TVD limiter to reduce oscillations in numerical schemes.
     Normalized variables NVD are used.
 
     Args:
-        c_norm_C (ndarray): Normalized concentration at cell centers.
-        x_norm_C (ndarray): Normalized position of cell centers.
-        x_norm_d (ndarray): Normalized position of down-wind face
+        normalized_concentration_center (ndarray): Normalized concentration at cell centers.
+        normalized_position_center (ndarray): Normalized position of cell centers.
+        normalized_position_downwind (ndarray): Normalized position of down-wind face
 
     Returns:
         ndarray: Normalized concentration difference c_norm_d-c_norm_C. (Equals 0 for upwind)
     """
-    c_norm_diff = np.zeros_like(c_norm_C)
-    return c_norm_diff
+    normalized_concentration_diff = np.zeros_like(normalized_concentration_center)
+    return normalized_concentration_diff
                
-def minmod(c_norm_C, x_norm_C, x_norm_d):
+def minmod(normalized_concentration_center, normalized_position_center, normalized_position_downwind):
     """
     Apply the Min-mod TVD limiter to reduce oscillations in numerical schemes.
     Normalized variables NVD are used.
 
     Args:
-        c_norm_C (ndarray): Normalized concentration at cell centers.
-        x_norm_C (ndarray): Normalized position of cell centers.
-        x_norm_d (ndarray): Normalized position of down-wind face
+        normalized_concentration_center (ndarray): Normalized concentration at cell centers.
+        normalized_position_center (ndarray): Normalized position of cell centers.
+        normalized_position_downwind (ndarray): Normalized position of down-wind face
 
     Returns:
         ndarray: Normalized concentration difference c_norm_d-c_norm_C.
     """
-    c_norm_diff = np.maximum(0,(x_norm_d-x_norm_C)*np.minimum(c_norm_C/x_norm_C, (1-c_norm_C)/(1-x_norm_C)));
-    return c_norm_diff
+    normalized_concentration_diff = np.maximum(0,(normalized_position_downwind-normalized_position_center)*np.minimum(normalized_concentration_center/normalized_position_center, (1-normalized_concentration_center)/(1-normalized_position_center)));
+    return normalized_concentration_diff
 
-def osher(c_norm_C, x_norm_C, x_norm_d):
+def osher(normalized_concentration_center, normalized_position_center, normalized_position_downwind):
     """
     Apply the Osher TVD limiter to reduce oscillations in numerical schemes.
     Normalized variables NVD are used.
 
     Args:
-        c_norm_C (ndarray): Normalized concentration at cell centers.
-        x_norm_C (ndarray): Normalized position of cell centers.
-        x_norm_d (ndarray): Normalized position of down-wind face
+        normalized_concentration_center (ndarray): Normalized concentration at cell centers.
+        normalized_position_center (ndarray): Normalized position of cell centers.
+        normalized_position_downwind (ndarray): Normalized position of down-wind face
 
     Returns:
         ndarray: Normalized concentration difference c_norm_d-c_norm_C.
     """
-    c_norm_diff = np.maximum(0,np.where(c_norm_C<x_norm_C/x_norm_d, (x_norm_d/x_norm_C - 1)*c_norm_C, 1 - c_norm_C))
-    return c_norm_diff
+    normalized_concentration_diff = np.maximum(0,np.where(normalized_concentration_center<normalized_position_center/normalized_position_downwind, (normalized_position_downwind/normalized_position_center - 1)*normalized_concentration_center, 1 - normalized_concentration_center))
+    return normalized_concentration_diff
 
-def clam(c_norm_C, x_norm_C, x_norm_d):
+def clam(normalized_concentration_center, normalized_position_center, normalized_position_downwind):
     """
     Apply the CLAM TVD limiter to reduce oscillations in numerical schemes.
     Normalized variables NVD are used.
 
     Args:
-        c_norm_C (ndarray): Normalized concentration at cell centers.
-        x_norm_C (ndarray): Normalized position of cell centers.
-        x_norm_d (ndarray): Normalized position of down-wind face
+        normalized_concentration_center (ndarray): Normalized concentration at cell centers.
+        normalized_position_center (ndarray): Normalized position of cell centers.
+        normalized_position_downwind (ndarray): Normalized position of down-wind face
 
     Returns:
         ndarray: Normalized concentration difference c_norm_d-c_norm_C.
     """
-    c_norm_diff = np.maximum(0,np.where(c_norm_C<x_norm_C/x_norm_d, (x_norm_d/x_norm_C - 1)*c_norm_C, 1 - c_norm_C))
-    return c_norm_diff
+    normalized_concentration_diff = np.maximum(0,np.where(normalized_concentration_center<normalized_position_center/normalized_position_downwind, (normalized_position_downwind/normalized_position_center - 1)*normalized_concentration_center, 1 - normalized_concentration_center))
+    return normalized_concentration_diff
 
-def muscl(c_norm_C, x_norm_C, x_norm_d):
+def muscl(normalized_concentration_center, normalized_position_center, normalized_position_downwind):
     """
     Apply the MUSCL limiter to reduce oscillations in numerical schemes.
     Normalized variables NVD are used.
 
     Args:
-        c_norm_C (ndarray): Normalized concentration at cell centers.
-        x_norm_C (ndarray): Normalized position of cell centers.
-        x_norm_d (ndarray): Normalized position of down-wind face
+        normalized_concentration_center (ndarray): Normalized concentration at cell centers.
+        normalized_position_center (ndarray): Normalized position of cell centers.
+        normalized_position_downwind (ndarray): Normalized position of down-wind face
 
     Returns:
         ndarray: Normalized concentration difference c_norm_d-c_norm_C.
     """
-    c_norm_diff = np.maximum(0,np.where(c_norm_C<x_norm_C/(2*x_norm_d), ((2*x_norm_d - x_norm_C)/x_norm_C - 1)*c_norm_C, 
-                             np.where(c_norm_C<1 + x_norm_C - x_norm_d, x_norm_d - x_norm_C, 1 - c_norm_C)))
-    return c_norm_diff
+    normalized_concentration_diff = np.maximum(0,np.where(normalized_concentration_center<normalized_position_center/(2*normalized_position_downwind), ((2*normalized_position_downwind - normalized_position_center)/normalized_position_center - 1)*normalized_concentration_center, 
+                             np.where(normalized_concentration_center<1 + normalized_position_center - normalized_position_downwind, normalized_position_downwind - normalized_position_center, 1 - normalized_concentration_center)))
+    return normalized_concentration_diff
 
-def smart(c_norm_C, x_norm_C, x_norm_d):
+def smart(normalized_concentration_center, normalized_position_center, normalized_position_downwind):
     """
     Apply the SMART TVD limiter to reduce oscillations in numerical schemes.
     Normalized variables NVD are used.
 
     Args:
-        c_norm_C (ndarray): Normalized concentration at cell centers.
-        x_norm_C (ndarray): Normalized position of cell centers.
-        x_norm_d (ndarray): Normalized position of down-wind face
+        normalized_concentration_center (ndarray): Normalized concentration at cell centers.
+        normalized_position_center (ndarray): Normalized position of cell centers.
+        normalized_position_downwind (ndarray): Normalized position of down-wind face
 
     Returns:
         ndarray: Normalized concentration difference c_norm_d-c_norm_C.
     """
-    c_norm_diff = np.maximum(0,np.where(c_norm_C<x_norm_C/3, (x_norm_d*(1 - 3*x_norm_C + 2*x_norm_d)/(x_norm_C*(1 - x_norm_C)) - 1)*c_norm_C, 
-                             np.where(c_norm_C<x_norm_C/x_norm_d*(1 + x_norm_d - x_norm_C), (x_norm_d*(x_norm_d - x_norm_C) + x_norm_d*(1 - x_norm_d)/x_norm_C*c_norm_C)/(1 - x_norm_C) - c_norm_C, 1 - c_norm_C)))
-    return c_norm_diff
+    normalized_concentration_diff = np.maximum(0,np.where(normalized_concentration_center<normalized_position_center/3, (normalized_position_downwind*(1 - 3*normalized_position_center + 2*normalized_position_downwind)/(normalized_position_center*(1 - normalized_position_center)) - 1)*normalized_concentration_center, 
+                             np.where(normalized_concentration_center<normalized_position_center/normalized_position_downwind*(1 + normalized_position_downwind - normalized_position_center), (normalized_position_downwind*(normalized_position_downwind - normalized_position_center) + normalized_position_downwind*(1 - normalized_position_downwind)/normalized_position_center*normalized_concentration_center)/(1 - normalized_position_center) - normalized_concentration_center, 1 - normalized_concentration_center)))
+    return normalized_concentration_diff
 
-def stoic(c_norm_C, x_norm_C, x_norm_d):
+def stoic(normalized_concentration_center, normalized_position_center, normalized_position_downwind):
     """
     Apply the STOIC TVD limiter to reduce oscillations in numerical schemes.
     Normalized variables NVD are used.
 
     Args:
-        c_norm_C (ndarray): Normalized concentration at cell centers.
-        x_norm_C (ndarray): Normalized position of cell centers.
-        x_norm_d (ndarray): Normalized position of down-wind face
+        normalized_concentration_center (ndarray): Normalized concentration at cell centers.
+        normalized_position_center (ndarray): Normalized position of cell centers.
+        normalized_position_downwind (ndarray): Normalized position of down-wind face
 
     Returns:
         ndarray: Normalized concentration difference c_norm_d-c_norm_C.
     """
-    c_norm_diff = np.maximum(0,np.where(c_norm_C<x_norm_C*(x_norm_d - x_norm_C)/(x_norm_C + x_norm_d + 2*x_norm_d*x_norm_d - 4*x_norm_d*x_norm_C), x_norm_d*(1 - 3*x_norm_C + 2*x_norm_d)/(x_norm_C*(1 - x_norm_C)) - c_norm_C, 
-                             np.where(c_norm_C<x_norm_C, (x_norm_d - x_norm_C + (1 - x_norm_d)*c_norm_C)/(1 - x_norm_C) - c_norm_C,
-                             np.where(c_norm_C<x_norm_C/x_norm_d*(1 + x_norm_d - x_norm_C), (x_norm_d*(x_norm_d - x_norm_C) + x_norm_d*(1 - x_norm_d)/x_norm_C*c_norm_C)/(1 - x_norm_C) - c_norm_C, 1 - c_norm_C))))
-    return c_norm_diff
+    normalized_concentration_diff = np.maximum(0,np.where(normalized_concentration_center<normalized_position_center*(normalized_position_downwind - normalized_position_center)/(normalized_position_center + normalized_position_downwind + 2*normalized_position_downwind*normalized_position_downwind - 4*normalized_position_downwind*normalized_position_center), normalized_position_downwind*(1 - 3*normalized_position_center + 2*normalized_position_downwind)/(normalized_position_center*(1 - normalized_position_center)) - normalized_concentration_center, 
+                             np.where(normalized_concentration_center<normalized_position_center, (normalized_position_downwind - normalized_position_center + (1 - normalized_position_downwind)*normalized_concentration_center)/(1 - normalized_position_center) - normalized_concentration_center,
+                             np.where(normalized_concentration_center<normalized_position_center/normalized_position_downwind*(1 + normalized_position_downwind - normalized_position_center), (normalized_position_downwind*(normalized_position_downwind - normalized_position_center) + normalized_position_downwind*(1 - normalized_position_downwind)/normalized_position_center*normalized_concentration_center)/(1 - normalized_position_center) - normalized_concentration_center, 1 - normalized_concentration_center))))
+    return normalized_concentration_diff
 
-def vanleer(c_norm_C, x_norm_C, x_norm_d):
+def vanleer(normalized_concentration_center, normalized_position_center, normalized_position_downwind):
     """
     Apply the van-Leer TVD limiter to reduce oscillations in numerical schemes.
     Normalized variables NVD are used.
 
     Args:
-        c_norm_C (ndarray): Normalized concentration at cell centers.
-        x_norm_C (ndarray): Normalized position of cell centers.
-        x_norm_d (ndarray): Normalized position of down-wind face
+        normalized_concentration_center (ndarray): Normalized concentration at cell centers.
+        normalized_position_center (ndarray): Normalized position of cell centers.
+        normalized_position_downwind (ndarray): Normalized position of down-wind face
 
     Returns:
         ndarray: Normalized concentration difference c_norm_d-c_norm_C.
     """
-    c_norm_diff = np.maximum(0, c_norm_C*(1-c_norm_C)*(x_norm_d-x_norm_C)/(x_norm_C*(1-x_norm_C)))   
-    return c_norm_diff
+    normalized_concentration_diff = np.maximum(0, normalized_concentration_center*(1-normalized_concentration_center)*(normalized_position_downwind-normalized_position_center)/(normalized_position_center*(1-normalized_position_center)))   
+    return normalized_concentration_diff
 
-def non_uniform_grid(x_L, x_R, n, dx_inf, factor):
+def non_uniform_grid(left_bound, right_bound, num_points, dx_inf, factor):
     """
-    Generate a non-uniform grid of points in the interval [x_L, x_R]
+    Generate a non-uniform grid of points in the interval [left_bound, right_bound]
     With factor > 1 the refinement will be at the left wall, 
     with 1/factor you will get the same refinement at the right wall.
     
     Parameters:
-        x_L (float): Start point of the interval.
-        x_R (float): End point of the interval.
-        n (int): Total number of face positions (including x_L and x_R)
+        left_bound (float): Start point of the interval.
+        right_bound (float): End point of the interval.
+        num_points (int): Total number of face positions (including left_bound and right_bound)
         dx_inf (float): Limiting upper-bound grid spacing
         factor (float): Factor used to increase grid spacing
 
@@ -1108,43 +1108,43 @@ def non_uniform_grid(x_L, x_R, n, dx_inf, factor):
         numpy.ndarray: Array containing the non-uniform grid points.
     """
     a = np.log(factor)
-    unif = np.arange(n)
+    unif = np.arange(num_points)
     b = np.exp(-a * unif)
-    L = x_R - x_L
-    c = (np.exp(a * (L / dx_inf - n + 1.0)) - b[-1]) / (1 - b[-1])
-    x_f = x_L + unif * dx_inf + np.log((1 - c) * b + c) * (dx_inf / a)
-    return x_f
+    L = right_bound - left_bound
+    c = (np.exp(a * (L / dx_inf - num_points + 1.0)) - b[-1]) / (1 - b[-1])
+    face_positions = left_bound + unif * dx_inf + np.log((1 - c) * b + c) * (dx_inf / a)
+    return face_positions
 
-def generate_grid(size, x_f, x_c = None, generate_x_c = False):
-    if (size+1 == len(x_f)):
-        x_f = np.array(x_f)
+def generate_grid(size, face_positions, cell_centers = None, generate_x_c = False):
+    if (size+1 == len(face_positions)):
+        face_positions = np.array(face_positions)
     else:
-        if (size+1 == len(x_f)):
-            x_f = np.array(x_f)
-        elif (len(x_f) ==2):
-            x_f = np.linspace(x_f[0], x_f[1], size+1)
-        elif (x_f ==None or len(x_f) ==0):
-            x_f = np.linspace(0.0, 1.0, size+1)
+        if (size+1 == len(face_positions)):
+            face_positions = np.array(face_positions)
+        elif (len(face_positions) ==2):
+            face_positions = np.linspace(face_positions[0], face_positions[1], size+1)
+        elif (face_positions ==None or len(face_positions) ==0):
+            face_positions = np.linspace(0.0, 1.0, size+1)
         else:
             raise ValueError("Grid not properly defined")
     if (generate_x_c):
-        if (x_c is None):
-            x_c = 0.5*(x_f[1:] + x_f[:-1])
-        elif (len(x_c) == size):
-            x_c = np.array(x_c)
+        if (cell_centers is None):
+            cell_centers = 0.5*(face_positions[1:] + face_positions[:-1])
+        elif (len(cell_centers) == size):
+            cell_centers = np.array(cell_centers)
         else:
             raise ValueError("Cell-centered grid not properly defined")
-        return x_f, x_c
+        return face_positions, cell_centers
     else:
-        return x_f
+        return face_positions
 
-def unwrap_bc(shape, bc):
+def unwrap_bc(shape, boundary_conditions):
     """
     Unwrap the boundary conditions for a given shape.
 
     Args:
         shape (tuple): shape of the domain.
-        bc (dict): Boundary conditions.
+        boundary_conditions (dict): Boundary conditions.
 
     Returns:
         tuple: Unwrapped boundary conditions (a, b, d).
@@ -1154,15 +1154,15 @@ def unwrap_bc(shape, bc):
     else:
         lgth_shape = len(shape)
 
-    if (bc is None):
+    if (boundary_conditions is None):
         a = np.zeros((1,) * lgth_shape)
         b = np.zeros((1,) * lgth_shape)
         d = np.zeros((1,) * lgth_shape)
     else:
-        a = np.array(bc['a'])
+        a = np.array(boundary_conditions['a'])
         a = a[(..., *([np.newaxis]*(lgth_shape-a.ndim)))]
-        b = np.array(bc['b'])
+        b = np.array(boundary_conditions['b'])
         b = b[(..., *([np.newaxis]*(lgth_shape-b.ndim)))]
-        d = np.array(bc['d'])
+        d = np.array(boundary_conditions['d'])
         d = d[(..., *([np.newaxis]*(lgth_shape-d.ndim)))]
     return a, b, d
