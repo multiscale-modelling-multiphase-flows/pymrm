@@ -9,7 +9,7 @@ echo "Common dependencies installed."
 
 # Function to run pylint on all Python files
 run_pylint() {
-  find . -type f -name "*.py" -print0 | while IFS= read -r -d '' py_code; do
+  find pymrm examples exercises -type f -name "*.py" -print0 | while IFS= read -r -d '' py_code; do
       echo "pylinting $py_code..."
       pylint "$py_code"
   done
@@ -19,12 +19,28 @@ run_pylint() {
 # Function to run Jupyter notebooks in the examples folder
 run_notebooks() {
   set -e  # Exit on any error
+
+  # Install the local package and nbclient for executing notebooks
+  python -m pip install -e .
+  python -m pip install nbclient ipykernel
+
   echo "Running example notebooks..."
-  NOTEBOOKS=$(find examples -maxdepth 1 -print0 -type f -name "*.ipynb")
+
+  # Run each notebook using nbclient
   find examples -maxdepth 1 -type f -name "*.ipynb" -print0 | while IFS= read -r -d '' nb; do
       echo "Running $nb..."
-      jupyter nbconvert --to notebook --execute "$nb" --output /dev/null
+      python -c "
+import nbformat
+from nbclient import NotebookClient
+
+with open('$nb') as f:
+    nb = nbformat.read(f, as_version=4)
+
+client = NotebookClient(nb)
+client.execute()
+"
   done
+
   echo "All notebooks ran successfully."
 }
 

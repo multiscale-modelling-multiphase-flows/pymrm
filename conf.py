@@ -22,7 +22,7 @@ copyright = '2024, E.A.J.F. Peters'
 author = 'E.A.J.F. Peters'
 
 # The full version, including alpha/beta/rc tags
-release = '2.0.0'
+release = '2.0.1'
 
 
 # -- General configuration ---------------------------------------------------
