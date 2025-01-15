@@ -1,0 +1,17 @@
+stages:
+  - test
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+before_script:
+  - python -m pip install --upgrade pip
+  - bash scripts/ci_setup_common.sh
+
+test:
+  stage: test
+  image: python:3.10
+  script:
+    - echo "Running tests..."
+  only:
+    - branches

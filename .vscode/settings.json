@@ -3,4 +3,8 @@
     "python.terminal.activateEnvironment": true,
     "terminal.integrated.shell.windows": "C:\\Windows\\System32\\cmd.exe",
     "cmake.configureOnOpen": false,
+    "python.formatting.provider": "autopep8",
+    "editor.formatOnSave": true,
+    "python.linting.enabled": true,
+    "python.linting.pylintEnabled": true
 }

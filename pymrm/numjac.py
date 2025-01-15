@@ -1,9 +1,8 @@
 import numpy as np
-from scipy.sparse import csc_array, csr_array, lil_array, sparray
+from scipy.sparse import csc_array, sparray
 from scipy.sparse.csgraph import reverse_cuthill_mckee
 from numba import njit, prange
 import numpy as np
-from typing import List, Tuple, Union
 
 def expand_dependencies(shape_in, shape_out, dependencies):
     """
