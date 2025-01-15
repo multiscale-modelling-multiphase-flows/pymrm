@@ -1,7 +1,5 @@
 #!/bin/bash
 
-set -e  # Exit on any error
-
 # Install common dependencies for Python projects
 python -m pip install --upgrade pip
 pip install -r mrm_requirements.txt  # Install all dependencies
@@ -20,6 +18,7 @@ run_pylint() {
 
 # Function to run Jupyter notebooks in the examples folder
 run_notebooks() {
+  set -e  # Exit on any error
   echo "Running example notebooks..."
   NOTEBOOKS=$(find examples -maxdepth 1 -print0 -type f -name "*.ipynb")
   find examples -maxdepth 1 -type f -name "*.ipynb" -print0 | while IFS= read -r -d '' nb; do
