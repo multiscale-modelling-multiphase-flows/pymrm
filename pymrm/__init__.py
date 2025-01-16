@@ -38,12 +38,12 @@ License: MIT License
 
 from .grid import generate_grid, non_uniform_grid
 from .operators import construct_grad, construct_grad_int, construct_grad_bc, construct_div
-from .convection import (
+from .convect import (
     construct_convflux_upwind, construct_convflux_upwind_int, construct_convflux_upwind_bc,
     upwind, minmod, osher, clam, muscl, smart, stoic, vanleer
 )
-from .interpolation import interp_stagg_to_cntr, interp_cntr_to_stagg, interp_cntr_to_stagg_tvd
-from .solvers import newton, clip_approach
+from .interpolate import interp_stagg_to_cntr, interp_cntr_to_stagg, interp_cntr_to_stagg_tvd
+from .solve import newton, clip_approach
 from .numjac import NumJac, stencil_block_diagonals
 from .utils import unwrap_bc, construct_coefficient_matrix, create_staggered_array
 
@@ -55,5 +55,5 @@ __all__ = [
     "interp_stagg_to_cntr", "interp_cntr_to_stagg", "interp_cntr_to_stagg_tvd",
     "newton", "clip_approach",
     "NumJac", "stencil_block_diagonals",
-    "unwrap_bc", "construct_coefficient_matrix", "create_staggered_array"
+    "construct_coefficient_matrix"
 ]

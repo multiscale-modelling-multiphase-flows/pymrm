@@ -13,4 +13,4 @@ dependencies:
   - ipython>=8.20
   - ipykernel>=6.28
   - pip:
-      - pymrm>=2.0.0
+      - pymrm>=2.1.0
