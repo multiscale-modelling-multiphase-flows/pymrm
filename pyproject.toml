@@ -4,13 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pymrm"
-dynamic = ["version"]
+dynamic = ["version"]  # Uses setuptools_scm for versioning
 dependencies = [
     "numpy>=1.26",
     "scipy>=1.13",
     "numba>=0.58"
 ]
-
 authors = [
     {name = "E.A.J.F. Peters", email = "e.a.j.f.peters@tue.nl"},
     {name = "M. van Sint Annaland", email= "M.v.SintAnnaland@tue.nl"},
@@ -29,19 +28,18 @@ classifiers = [
     "Development Status :: 4 - Beta",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12", # Add supported versions
+    "Programming Language :: Python :: 3.12",
     "License :: OSI Approved :: MIT License",
-    "Intended Audience :: Science/Research", # Add audience
-    "Topic :: Scientific/Engineering :: Chemical Engineering", # Add relevant topics
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Chemical Engineering"
 ]
 
 [tool.setuptools.packages.find]
 where = ["."]
-include-package-data = true
+include = ["pymrm*"]  # ✅ Correct inclusion of the pymrm package
 
 [tool.setuptools_scm]
 write_to = "pymrm/_version.py"
-
 
 [project.urls]
 Homepage = "https://github.com/eajfpeters/pymrm"
