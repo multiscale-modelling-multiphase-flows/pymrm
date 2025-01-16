@@ -39,6 +39,7 @@ classifiers = [
 where = ["pymrm"]
 
 [tool.setuptools]
+packages = ["pymrm"]
 include-package-data = true
 
 [tool.setuptools_scm]
