@@ -11,8 +11,7 @@ echo "Common dependencies installed."
 run_pylint() {
   find pymrm examples exercises -type f -name "*.py" -print0 | while IFS= read -r -d '' py_code; do
       echo "pylinting $py_code..."
-      pylint --score=y --exit-zero --disable=all --enable=syntax-error \
-             --msg-template="{path}: Overall Score: {score}" "$py_code"
+      pylint --score=y --exit-zero "$py_code" | grep "Your code has been rated at"
   done
   echo "All Python files passed pylint."
 }
