@@ -47,7 +47,7 @@ def interp_stagg_to_cntr(staggered_values, x_f, x_c=None, axis=0):
     shape_f = list(staggered_values.shape)
     if axis < 0:
         axis += len(shape_f)
-    shape_f_t = [np.prod(shape_f[:axis]), shape_f[axis], np.prod(shape_f[axis + 1:])]
+    shape_f_t = [math.prod(shape_f[:axis]), math.prod(shape_f[axis:axis+1]), math.prod(shape_f[axis + 1:])]
     shape = shape_f.copy()
     shape[axis] -= 1
     staggered_values = np.reshape(staggered_values, shape_f_t)
@@ -78,7 +78,7 @@ def interp_cntr_to_stagg(cell_centered_values, x_f, x_c=None, axis=0):
     shape = list(cell_centered_values.shape)
     if axis < 0:
         axis += len(shape)
-    shape_t = [np.prod(shape[:axis]), shape[axis], np.prod(shape[axis + 1:])]
+    shape_t = [math.prod(shape[:axis]), math.prod(shape[axis:axis+1]), math.prod(shape[axis + 1:])]
     shape_f = shape.copy()
     shape_f[axis] += 1
     shape_f_t = shape_t.copy()
@@ -121,7 +121,7 @@ def interp_cntr_to_stagg_tvd(cell_centered_values, x_f, x_c=None, bc=None, v=0, 
     shape = list(cell_centered_values.shape)
     if axis < 0:
         axis += len(shape)
-    shape_t = [math.prod(shape[:axis]), shape[axis], math.prod(
+    shape_t = [math.prod(shape[:axis]), math.prod(shape[axis:axis+1]), math.prod(
         shape[axis + 1:])]  # reshape as a triplet
     shape_f = shape.copy()
     shape_f[axis] = shape[axis] + 1
