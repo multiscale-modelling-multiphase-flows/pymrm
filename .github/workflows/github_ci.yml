@@ -24,4 +24,4 @@ jobs:
 
     - name: Install common dependencies and run checks
       run: |
-        bash ci/common.sh
+        bash scripts/ci_setup_common.sh
