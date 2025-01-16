@@ -1,2 +1,3 @@
 include examples/*.ipynb
 include examples/*.py
+include pymrm/_version.py
