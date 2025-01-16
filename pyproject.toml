@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pymrm"
-dynamic = "version"
+dynamic = ["version"]
 dependencies = [
     "numpy>=1.26",
     "scipy>=1.13",
