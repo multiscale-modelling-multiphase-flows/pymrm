@@ -9,7 +9,6 @@ dependencies = [
     "scipy>=1.13",
     "numba>=0.58"
 ]
-# ... (rest of the metadata remains the same)
 
 authors = [
     {name = "E.A.J.F. Peters", email = "e.a.j.f.peters@tue.nl"},
@@ -36,10 +35,7 @@ classifiers = [
 ]
 
 [tool.setuptools.packages.find]
-where = ["pymrm"]
-
-[tool.setuptools]
-packages = ["pymrm"]
+where = ["."]
 include-package-data = true
 
 [tool.setuptools_scm]
