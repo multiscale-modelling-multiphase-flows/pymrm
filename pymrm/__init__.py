@@ -42,10 +42,10 @@ from .convect import (
     construct_convflux_upwind, construct_convflux_upwind_int, construct_convflux_upwind_bc,
     upwind, minmod, osher, clam, muscl, smart, stoic, vanleer
 )
-from .interpolate import interp_stagg_to_cntr, interp_cntr_to_stagg, interp_cntr_to_stagg_tvd
+from .interpolate import interp_stagg_to_cntr, interp_cntr_to_stagg, interp_cntr_to_stagg_tvd, create_staggered_array
 from .solve import newton, clip_approach
 from .numjac import NumJac, stencil_block_diagonals
-from .utils import unwrap_bc, construct_coefficient_matrix, create_staggered_array
+from .helpers import unwrap_bc, construct_coefficient_matrix
 
 __all__ = [
     "generate_grid", "non_uniform_grid",

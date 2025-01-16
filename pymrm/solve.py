@@ -60,3 +60,29 @@ def newton(function, initial_guess, args=(), tolerance=1.49012e-08, max_iteratio
             return OptimizeResult({'x': x, 'success': True, 'nit': it + 1, 'fun': g, 'message': 'Converged'})
 
     return OptimizeResult({'x': x, 'success': False, 'nit': max_iterations, 'fun': g, 'message': 'Did not converge'})
+
+def clip_approach(values, function, lower_bounds=0, upper_bounds=None, factor=0):
+    """
+    Filter values with lower and upper bounds using an approach factor.
+
+    Args:
+        values (ndarray): The array of values to be filtered.
+        function (callable): The function to apply.
+        lower_bounds (float or ndarray, optional): The lower bounds. Default is 0.
+        upper_bounds (float or ndarray, optional): The upper bounds. Default is None.
+        factor (float, optional): The approach factor. Default is 0.
+    """
+    if factor == 0:
+        np.clip(values, lower_bounds, upper_bounds, out=values)
+    else:
+        if lower_bounds is not None:
+            below_lower = (values < lower_bounds)
+            if np.any(below_lower):
+                broadcasted_lower_bounds = np.broadcast_to(lower_bounds, values.shape)
+                values[below_lower] = (1.0 + factor) * broadcasted_lower_bounds[below_lower] - factor * values[below_lower]
+        if upper_bounds is not None:
+            above_upper = (values > upper_bounds)
+            if np.any(above_upper):
+                broadcasted_upper_bounds = np.broadcast_to(upper_bounds, values.shape)
+                values[above_upper] = (1.0 + factor) * broadcasted_upper_bounds[above_upper] - factor * values[above_upper]
+
