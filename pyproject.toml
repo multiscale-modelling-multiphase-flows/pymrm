@@ -4,12 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pymrm"
-version = "2.0.0"
 dependencies = [
     "numpy>=1.26",
     "scipy>=1.13",
     "numba>=0.58"
 ]
+# ... (rest of the metadata remains the same)
+
 authors = [
     {name = "E.A.J.F. Peters", email = "e.a.j.f.peters@tue.nl"},
     {name = "M. van Sint Annaland", email= "M.v.SintAnnaland@tue.nl"},
@@ -23,10 +24,15 @@ description = "Functions for multiphase reactor modeling"
 readme = "README.md"
 keywords = ["MRM", "modeling", "multiphase", "diffusion", "convection"]
 requires-python = ">=3.10"
+
 classifiers = [
     "Development Status :: 4 - Beta",
-    "Programming Language :: Python",
-    "License :: OSI Approved :: MIT License"
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12", # Add supported versions
+    "License :: OSI Approved :: MIT License",
+    "Intended Audience :: Science/Research", # Add audience
+    "Topic :: Scientific/Engineering :: Chemical Engineering", # Add relevant topics
 ]
 
 [tool.setuptools.packages.find]
@@ -34,6 +40,9 @@ where = ["pymrm"]
 
 [tool.setuptools]
 include-package-data = true
+
+[tool.setuptools_scm]
+write_to = "pymrm/_version.py"
 
 
 [project.urls]
