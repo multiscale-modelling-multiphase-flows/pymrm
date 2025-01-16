@@ -43,7 +43,7 @@ def construct_grad(shape, x_f, x_c=None, bc=(None, None), axis=0):
     x_f, x_c = generate_grid(shape[axis], x_f, generate_x_c=True, x_c=x_c)
     grad_matrix = construct_grad_int(shape, x_f, x_c, axis)
 
-    if bc is (None, None):
+    if bc == (None, None):
         shape_f = shape.copy()
         if axis < 0:
             axis += len(shape)

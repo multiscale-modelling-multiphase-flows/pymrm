@@ -27,6 +27,7 @@ Dependencies:
 - pymrm.helpers: For boundary condition handling (`unwrap_bc`).
 """
 
+import math
 import numpy as np
 from .helpers import unwrap_bc
 
@@ -288,7 +289,6 @@ def create_staggered_array(array, shape, axis, x_f=None, x_c=None):
                     shape_new[i] = shape[i]
                     break
         array = array.reshape(shape_new)
-    print(f"array.ndim: {array.ndim}, len(shape): {len(shape)}")
     if array.ndim != len(shape):
         raise ValueError("The array has the wrong number of dimensions.")
     if (array.shape[axis] == shape[axis]):
