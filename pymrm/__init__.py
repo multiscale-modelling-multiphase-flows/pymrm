@@ -15,7 +15,7 @@ nonlinear solvers, and utility functions.
 - `numjac`: Numerical Jacobian construction for nonlinear systems.
 
 **Example Usage:**
-```python
+:::python
 from pymrm import non_uniform_grid, construct_grad, newton
 
 # Generate a non-uniform grid
@@ -26,6 +26,7 @@ grad, grad_bc = construct_grad((100,), x_f)
 
 # Use Newton's method to solve a nonlinear problem
 solution = newton(lambda x: x**2 - 2, initial_guess=1.0)
+:::
 
 Authors:
 - E.A.J.F. Peters
