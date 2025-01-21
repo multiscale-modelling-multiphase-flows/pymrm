@@ -5,27 +5,38 @@ This package provides a comprehensive set of tools for modeling multiphase react
 including grid generation, numerical operators, convection schemes, interpolation methods, 
 nonlinear solvers, and utility functions.
 
-**Submodules:**
-- `grid`: Functions for generating uniform and non-uniform grids.
-- `operator`: Construction of gradient and divergence operators for finite volume methods.
-- `convection`: High-resolution convection schemes and TVD limiters.
-- `interpolate`: Interpolation techniques between staggered and cell-centered grids.
-- `solve`: Nonlinear solvers and numerical approaches.
-- `helpers`: Utility functions supporting core operations.
-- `numjac`: Numerical Jacobian construction for nonlinear systems.
+Submodules:
+- grid: Functions for generating uniform and non-uniform grids.
+- operator: Construction of gradient and divergence operators for finite volume methods.
+- convection: High-resolution convection schemes and TVD limiters.
+- interpolate: Interpolation techniques between staggered and cell-centered grids.
+- solve: Nonlinear solvers and numerical approaches.
+- helpers: Utility functions supporting core operations.
+- numjac: Numerical Jacobian construction for nonlinear systems.
 
-**Example Usage:**
-:::python
-from pymrm import non_uniform_grid, construct_grad, newton
+Example Usage:
+:::{code-cell} python
+:execution: false
+import numpy as np
+import matplotlib.pyplot as plt
+from pymrm import construct_grad, construct_div
 
-# Generate a non-uniform grid
-x_f = non_uniform_grid(0, 1, 100, dx_inf=0.01, factor=1.05)
+# Define the grid
+shape = (100,)
+x_f = np.linspace(0, 1, shape[0]+1)
+x_c = 0.5*(x_f[1:] + x_f[:-1])
 
-# Construct a gradient operator
-grad, grad_bc = construct_grad((100,), x_f)
+# Set boundary conditions
+bc_L = {a: 0, b:1, d:1}
+bc_R = {a: 0, b:1, d:0}
+grad_mat, grad_bc = construct_grad(shape, x_f, x_c, bc=(bc_L, bc_R))
+div_mat = construct_div(shape, x_f)
+lapl_mat = div_mat @ grad_mat
+lapl_bc = div_mat @ grad_bc
 
-# Use Newton's method to solve a nonlinear problem
-solution = newton(lambda x: x**2 - 2, initial_guess=1.0)
+c = np.zeros(shape)
+c[:] = lapl_mat.solve(lapl_bc)
+plt.plot(x_c, c)
 :::
 
 Authors:
