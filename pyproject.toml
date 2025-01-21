@@ -42,5 +42,5 @@ include = ["pymrm*"]  # ✅ Correct inclusion of the pymrm package
 write_to = "pymrm/_version.py"
 
 [project.urls]
-Homepage = "https://github.com/eajfpeters/pymrm"
-Repository = "https://github.com/eajfpeters/pymrm"
+Homepage = "https://github.com/multiscale-modelling-multiphase-flows/pymrm-book"
+Repository = "https://github.com/multiscale-modelling-multiphase-flows/pymrm"
