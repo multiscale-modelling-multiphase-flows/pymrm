@@ -9,9 +9,9 @@ A suggested setup under Windows is using Anaconda (for Python) in combination wi
 
 #### Step 2: Set Up the Virtual Environment
 1. Open the Anaconda Prompt (or your terminal on macOS/Linux).
-2. Navigate to the directory containing your mrm_environment.yml file.
+2. Navigate to the directory containing your environment.yml file.
 3. Create the Anaconda environment by running:
-`conda env create -f mrm_environment.yml` 
+`conda env create -f environment.yml` 
 This command creates a new environment named `mrm` configured with the necessary Python packages.
 
 #### Step 3: Activate the Environment
@@ -42,8 +42,8 @@ On Windows: `mrm\Scripts\activate`
 On macOS/Linux: `source mrm/bin/activate`
 
 #### Step 3: Install Required Packages
-1. Ensure you are in the directory containing the mrm_requirements.txt file.
-2. Install the required packages using: `pip install -r mrm_requirements.txt`
+1. Ensure you are in the directory containing the requirements.txt file.
+2. Install the required packages using: `pip install -r requirements.txt`
 
 #### Step 4: Install and Configure VS Code
 1. Follow the same installation and configuration instructions for VS Code as described in Option 1, steps 4 and 5.

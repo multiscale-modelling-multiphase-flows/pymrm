@@ -2,7 +2,7 @@
 
 # Install common dependencies for Python projects
 python -m pip install --upgrade pip
-pip install -r mrm_requirements.txt  # Install all dependencies
+pip install -r requirements.txt  # Install all dependencies
 pip install pylint nbconvert nbformat ipykernel jupyter
 
 echo "Common dependencies installed."
