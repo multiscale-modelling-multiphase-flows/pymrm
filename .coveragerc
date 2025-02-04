@@ -1,0 +1,12 @@
+[run]
+omit = test/*
+
+[report]
+fail_under = 80
+omit = test/*
+
+[html]
+directory = test/coverage_html
+
+[xml]
+output = test/coverage.xml

@@ -1,0 +1,12 @@
+{
+    "python.testing.pytestArgs": [
+        "./src",
+        "./test/",
+        "--cov=./src",
+        "--cov-report=html",
+        "--cov-report=xml",
+        "--cov-config=.coveragerc"
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true
+}

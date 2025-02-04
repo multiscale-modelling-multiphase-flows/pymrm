@@ -2,6 +2,15 @@
 
 In the Multiphase Reactor Modeling class, we will use Python for computations. We will utilize standard packages such as NumPy and SciPy, along with our own package: PyMRM.
 
+## Quick and Easy with VS Code
+Here a quick and easy way to get the setup up and running:
+1. First download the appropriate VS Code version [here](https://code.visualstudio.com/), if you don't have it already
+2. Create a folder in which you want to work and open it in VS Code
+3. Create a Python file in this folder, e.g. "test.py". If VS Code does not detect the Python plugin, it will ask you if you want to install it. Follow the instructions.
+4. In the search/command bar at the top of VS Code type ">Python: Select Interpreter", or hit `CTRL+P` and chose Python: Select Interpreter
+5. Choose the option "+ Create Virtual Environment" and choose the type "Venv" or "Conda" depending on your preferences
+6. In the terminal (Terminal > New Terminal) you can now install pymrm either as described in Step 3 below
+
 ## Step 1: Installing Python
 
 1. **Download and Install Python**:
@@ -25,17 +34,17 @@ In the Multiphase Reactor Modeling class, we will use Python for computations. W
    - Navigate to your project directory.
    - Run the following command to create a virtual environment:
      ```sh
-     python -m venv venv
+     python -m venv .venv
      ```
 
 2. **Activate the Virtual Environment**:
    - On Windows:
      ```sh
-     venv\Scripts\activate
+     .venv\Scripts\activate
      ```
    - On macOS and Linux:
      ```sh
-     source venv/bin/activate
+     source .venv/bin/activate
      ```
 
 3. **Verify Virtual Environment Activation**:
@@ -47,10 +56,17 @@ In the Multiphase Reactor Modeling class, we will use Python for computations. W
 
 ## Step 3: Installing Required Packages
 
+**IMPORTANT:** For installation from PyPI, follow the instructions further down! For installation
+from a local repository simply change to the root folder of the repository and type
+```sh
+python -m pip install .
+```
+
+### Installing from PyPi
 1. **Upgrade pip**:
    - Run the following command to upgrade pip to the latest version:
      ```sh
-     pip install --upgrade pip
+     python -m pip install --upgrade pip
      ```
 
 2. **Install NumPy and SciPy**:

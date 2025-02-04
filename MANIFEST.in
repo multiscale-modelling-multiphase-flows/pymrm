@@ -1,4 +1,4 @@
-include pymrm/_version.py
-recursive-include pymrm *.py
+include src/pymrm/_version.py
+recursive-include src/pymrm *.py
 include examples/*.ipynb
 include examples/*.py

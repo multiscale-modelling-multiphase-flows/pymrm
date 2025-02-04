@@ -1,0 +1,77 @@
+.env_defaults:
+  image:
+    name: davevader/pymrm_linux:1.0
+    entrypoint: [""]
+
+stages:
+  - analysis
+  - build
+  - test
+  - verification
+
+linter:
+  extends: .env_defaults
+  stage: analysis
+  allow_failure: true
+  dependencies: []
+  script:
+    - scripts/run_linter.sh
+  artifacts:
+    when: always
+    expire_in: 1 week
+    expose_as: 'linter'
+    paths:
+      - test/linter_errors.xml
+      - test/linter_errors.txt
+
+install:
+  stage: build
+  image: python:3.10
+  dependencies: []
+  needs: []
+  script:
+    - python -m pip install .
+
+documentation:
+  stage: analysis
+  extends: .env_defaults
+  dependencies: []
+  needs: []
+  allow_failure: true
+  script:
+    - scripts/build_documentation.sh
+  artifacts:
+    when: always
+    expire_in: 1 week
+    expose_as: 'documentation'
+    paths:
+      - docs/sphinx/documentation_errors.txt
+
+unit_test:
+  stage: test
+  extends: .env_defaults
+  allow_failure: true
+  script:
+    - scripts/run_unit_tests.sh
+  artifacts:
+    when: always
+    expire_in: 1 week
+    expose_as: 'coverage'
+    paths:
+      - test/coverage.xml
+
+examples:
+  stage: verification
+  extends: .env_defaults
+  allow_failure: true
+  script:
+    - python -m pip install .
+    - python scripts/run_examples.py
+
+exercises:
+  stage: verification
+  extends: .env_defaults
+  allow_failure: true
+  script:
+    - python -m pip install .
+    - python scripts/run_exercises.py
