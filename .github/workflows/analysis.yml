@@ -41,6 +41,8 @@ jobs:
       options: --user root
 
     steps:
+    - uses: actions/checkout@v4
+
     - name: Run Sphinx
       run: scripts/build_documentation.sh
 
