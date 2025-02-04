@@ -1,0 +1,43 @@
+name: Verification
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+    branches:
+      - main
+      - dev
+
+jobs:
+  exercises:
+    runs-on: ubuntu-latest
+    container:
+      image: davevader/pymrm_linux:1.0
+# workaround, potentially leave the user as root in dockerfile
+# see here: https://github.com/actions/checkout/issues/956
+      options: --user root
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: run exercises
+      run: |
+        python -m pip install .
+        python scripts/run_exercises.py
+
+  examples:
+    runs-on: ubuntu-latest
+    container:
+      image: davevader/pymrm_linux:1.0
+# workaround, potentially leave the user as root in dockerfile
+# see here: https://github.com/actions/checkout/issues/956
+      options: --user root
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Run examples
+      run: |
+        python -m pip install .
+        python scripts/run_examples.py

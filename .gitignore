@@ -25,6 +25,13 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+*_version.py
+
+
+# Sphinx documentation
+docs/sphinx/_static/*
+docs/sphinx/_templates/*
+docs/sphinx/_build/*
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -81,6 +88,14 @@ target/
 # IPython
 profile_default/
 ipython_config.py
+
+# VS Code
+.vscode/
+
+# coverage
+docs/coverage*
+*xml
+*txt
 
 # pyenv
 #   For a library or package, you might want to ignore these files since the code is

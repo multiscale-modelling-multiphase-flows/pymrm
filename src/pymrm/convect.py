@@ -28,8 +28,9 @@ import math
 import numpy as np
 from scipy.sparse import csc_array
 from .grid import generate_grid
-from .interpolate import interp_cntr_to_stagg, create_staggered_array
+from .interpolate import create_staggered_array
 from .helpers import unwrap_bc
+
 
 def construct_convflux_upwind(shape, x_f, x_c=None, bc=(None, None), v=1.0, axis=0):
     """
@@ -63,6 +64,7 @@ def construct_convflux_upwind(shape, x_f, x_c=None, bc=(None, None), v=1.0, axis
         conv_matrix += conv_matrix_bc
     return conv_matrix, conv_bc
 
+
 def construct_convflux_upwind_int(shape, v=1.0, axis=0):
     """
     Construct the convective flux matrix for internal faces using the upwind scheme.
@@ -93,15 +95,18 @@ def construct_convflux_upwind_int(shape, v=1.0, axis=0):
     else:
         v_t = v.reshape(shape_f_t)
     fltr_v_pos = (v_t > 0)
-    i_f = (shape_t[1]+1) * shape_t[2] * np.arange(shape_t[0]).reshape(-1, 1, 1) + shape_t[2] * np.arange(1, shape_t[1]).reshape((
-        1, -1, 1)) + np.arange(shape_t[2]).reshape((1, 1, -1))
-    i_c = shape_t[1] * shape_t[2] * np.arange(shape_t[0]).reshape((-1, 1, 1)) + shape_t[2] * np.arange(1, shape_t[1]).reshape((
-        1, -1, 1)) + np.arange(shape_t[2]).reshape((1, 1, -1))
+    i_f = ((shape_t[1]+1) * shape_t[2] * np.arange(shape_t[0]).reshape(-1, 1, 1)
+          + shape_t[2] * np.arange(1, shape_t[1]).reshape((1, -1, 1))               # noqa: E128
+          + np.arange(shape_t[2]).reshape((1, 1, -1)))                              # noqa: E128
+    i_c = (shape_t[1] * shape_t[2] * np.arange(shape_t[0]).reshape((-1, 1, 1))
+          + shape_t[2] * np.arange(1, shape_t[1]).reshape((1, -1, 1))               # noqa: E128
+          + np.arange(shape_t[2]).reshape((1, 1, -1)))                              # noqa: E128
     i_c = i_c - shape_t[2] * fltr_v_pos[:, 1:-1, :]
-    conv_matrix = csc_array((v_t[:, 1:-1, :].ravel(), (i_f.ravel(), i_c.ravel())), shape=(
-        math.prod(shape_f_t), math.prod(shape_t)))
+    conv_matrix = csc_array((v_t[:, 1:-1, :].ravel(), (i_f.ravel(), i_c.ravel())),
+                            shape=(math.prod(shape_f_t), math.prod(shape_t)))
     conv_matrix.sort_indices()
     return conv_matrix
+
 
 def construct_convflux_upwind_bc(shape, x_f, x_c=None, bc=(None, None), v=1.0, axis=0):
     """
@@ -110,7 +115,7 @@ def construct_convflux_upwind_bc(shape, x_f, x_c=None, bc=(None, None), v=1.0, a
     Args:
         shape (tuple): Shape of the multi-dimensional array.
         x_f (ndarray): Face positions.
-        x_c (ndarray, optional): Cell-centered positions. If not provided, it will be calculated based on the face array.
+        x_c (ndarray, optional): Cell-centered positions. If not provided, it is calculated based on the face array.
         bc (tuple, optional): A tuple containing the left and right boundary conditions. Default is (None, None).
         v (float, ndarray): The velocity array.
         axis (int, optional): The axis along which the numerical differentiation is performed. Default is 0.
@@ -160,15 +165,15 @@ def construct_convflux_upwind_bc(shape, x_f, x_c=None, bc=(None, None), v=1.0, a
         alpha_2_right = -(x_c[0] - x_f[1]) / (
             (x_f[0] - x_f[1]) * (x_f[0] - x_c[0]))
         alpha_0_right = alpha_1 - alpha_2_right
-        fctr = ((b[0] + alpha_0_left * a[0]) * (b[1] +
-                                            alpha_0_right * a[1]) - alpha_2_left * alpha_2_right * a[0] * a[1])
+        fctr = ((b[0] + alpha_0_left * a[0]) * (b[1]
+                + alpha_0_right * a[1]) - alpha_2_left * alpha_2_right * a[0] * a[1])
         np.divide(1, fctr, out=fctr, where=(fctr != 0))
         values = np.empty((shape_t[0], 2, shape_t[2]))
         values[:, 0, :] = ((alpha_1 * a[0] * (a[1] * (alpha_0_right - alpha_2_left) + b[1])
                            * fctr + np.zeros(shape)).reshape(shape_bc_d))
         values[:, 1, :] = ((alpha_1 * a[1] * (a[0] * (alpha_0_left - alpha_2_right) + b[0])
                            * fctr + np.zeros(shape)).reshape(shape_bc_d))
-        
+
         i_f_bc = shape_f_t[1] * shape_f_t[2] * np.arange(shape_f_t[0]).reshape((-1, 1, 1)) + shape_f_t[2] * np.array(
             [0, shape_f_t[1]-1]).reshape((1, -1, 1)) + np.arange(shape_f_t[2]).reshape((1, 1, -1))
         values_bc = np.empty((shape_t[0], 2, shape_t[2]))
@@ -182,8 +187,8 @@ def construct_convflux_upwind_bc(shape, x_f, x_c=None, bc=(None, None), v=1.0, a
             values *= v
             values_bc *= v
         else:
-            slicer= [slice(None)]*len(shape)
-            slicer[axis] = [0,-1]
+            slicer = [slice(None)]*len(shape)
+            slicer[axis] = [0, -1]
             shape_f_b = shape_f
             shape_f_b[axis] = 2
             values = values.reshape(shape_f_b)
@@ -193,17 +198,22 @@ def construct_convflux_upwind_bc(shape, x_f, x_c=None, bc=(None, None), v=1.0, a
         conv_matrix = csc_array((values.ravel(), (i_f.ravel(), i_c.ravel())), shape=(
             math.prod(shape_f_t), math.prod(shape_t)))
     else:
-        i_c = shape_t[1] * shape_t[2] * np.arange(shape_t[0]).reshape(-1, 1, 1) + shape_t[2] * np.array([0, 1, shape_t[1]-2, shape_t[1]-1]).reshape((
-            1, -1, 1)) + np.arange(shape_t[2]).reshape((1, 1, -1))
-        i_f = shape_f_t[1] * shape_t[2] * np.arange(shape_t[0]).reshape(-1, 1, 1) + shape_t[2] * np.array([0, 0, shape_f_t[1]-1, shape_f_t[1]-1]).reshape((
-            1, -1, 1)) + np.arange(shape_t[2]).reshape((1, 1, -1))
-        i_f_bc = shape_f_t[1] * shape_f_t[2] * np.arange(shape_f_t[0]).reshape((-1, 1, 1)) + shape_f_t[2] * np.array(
-            [0, shape_f_t[1]-1]).reshape((1, -1, 1)) + np.arange(shape_f_t[2]).reshape((1, 1, -1))
+        i_c = (shape_t[1] * shape_t[2] * np.arange(shape_t[0]).reshape(-1, 1, 1)
+               + shape_t[2] * np.array([0, 1, shape_t[1]-2, shape_t[1]-1]).reshape((1, -1, 1))
+               + np.arange(shape_t[2]).reshape((1, 1, -1)))
+        i_f = (shape_f_t[1] * shape_t[2] * np.arange(shape_t[0]).reshape(-1, 1, 1)
+               + shape_t[2] * np.array([0, 0, shape_f_t[1]-1, shape_f_t[1]-1]).reshape((1, -1, 1))
+               + np.arange(shape_t[2]).reshape((1, 1, -1)))
+        i_f_bc = (shape_f_t[1] * shape_f_t[2] * np.arange(shape_f_t[0]).reshape((-1, 1, 1))
+                  + shape_f_t[2] * np.array([0, shape_f_t[1]-1]).reshape((1, -1, 1))
+                  + np.arange(shape_f_t[2]).reshape((1, 1, -1)))
         values_bc = np.zeros((shape_t[0], 2, shape_t[2]))
         values = np.zeros((shape_t[0], 4, shape_t[2]))
         if x_c is None:
-            x_c = 0.5*np.array([x_f[0] + x_f[1], x_f[1] + x_f[2],
-                                        x_f[-3] + x_f[-2], x_f[-2] + x_f[-1]])
+            x_c = 0.5 * np.array([x_f[0] + x_f[1],
+                                  x_f[1] + x_f[2],
+                                  x_f[-3] + x_f[-2],
+                                  x_f[-2] + x_f[-1]])
 
         # Get a, b, and d for left bc from dictionary
         a, b, d = unwrap_bc(shape, bc[0])
@@ -246,14 +256,14 @@ def construct_convflux_upwind_bc(shape, x_f, x_c=None, bc=(None, None), v=1.0, a
             values *= v
             values_bc *= v
         else:
-            slicer= [slice(None)]*len(shape)
-            slicer[axis] = [0,0,-1,-1]
+            slicer = [slice(None)]*len(shape)
+            slicer[axis] = [0, 0, -1, -1]
             shape_f_b = shape_f
             shape_f_b[axis] = 4
             values = values.reshape(shape_f_b)
             values *= v[tuple(slicer)]
             shape_f_b[axis] = 2
-            slicer[axis] = [0,-1]
+            slicer[axis] = [0, -1]
             values_bc = values_bc.reshape(shape_f_b)
             values_bc *= v[tuple(slicer)]
         conv_matrix = csc_array((values.ravel(), (i_f.ravel(), i_c.ravel())), shape=(
@@ -264,6 +274,7 @@ def construct_convflux_upwind_bc(shape, x_f, x_c=None, bc=(None, None), v=1.0, a
     return conv_matrix, conv_bc
 
 # TVD Limiters
+
 
 def upwind(normalized_c_c, normalized_x_c, normalized_x_d):
     """
@@ -345,8 +356,8 @@ def muscl(normalized_c_c, normalized_x_c, normalized_x_d):
     Returns:
         ndarray: Normalized concentration difference c_norm_d - c_norm_C.
     """
-    normalized_concentration_diff = np.maximum(0, np.where(normalized_c_c < normalized_x_c/(2*normalized_x_d), ((2*normalized_x_d - normalized_x_c)/normalized_x_c - 1)*normalized_c_c,
-                                                           np.where(normalized_c_c < 1 + normalized_x_c - normalized_x_d, normalized_x_d - normalized_x_c, 1 - normalized_c_c)))
+    normalized_concentration_diff = np.maximum(0, np.where(normalized_c_c < normalized_x_c/(2*normalized_x_d), ((2*normalized_x_d - normalized_x_c)/normalized_x_c - 1)*normalized_c_c,  # noqa: E501
+                                                           np.where(normalized_c_c < 1 + normalized_x_c - normalized_x_d, normalized_x_d - normalized_x_c, 1 - normalized_c_c)))         # noqa: E501
     return normalized_concentration_diff
 
 
@@ -362,8 +373,10 @@ def smart(normalized_c_c, normalized_x_c, normalized_x_d):
     Returns:
         ndarray: Normalized concentration difference c_norm_d - c_norm_C.
     """
-    normalized_concentration_diff = np.maximum(0, np.where(normalized_c_c < normalized_x_c/3, (normalized_x_d*(1 - 3*normalized_x_c + 2*normalized_x_d)/(normalized_x_c*(1 - normalized_x_c)) - 1)*normalized_c_c,
-                                                           np.where(normalized_c_c < normalized_x_c/normalized_x_d*(1 + normalized_x_d - normalized_x_c), (normalized_x_d*(normalized_x_d - normalized_x_c) + normalized_x_d*(1 - normalized_x_d)/normalized_x_c*normalized_c_c)/(1 - normalized_x_c) - normalized_c_c, 1 - normalized_c_c)))
+    normalized_concentration_diff = np.maximum(0, np.where(normalized_c_c < normalized_x_c/3, (normalized_x_d*(1 - 3*normalized_x_c + 2*normalized_x_d)/(normalized_x_c*(1 - normalized_x_c)) - 1)*normalized_c_c,     # noqa: E501
+                                                           np.where(normalized_c_c < normalized_x_c/normalized_x_d*(1 + normalized_x_d - normalized_x_c),     # noqa: E501
+                                                                    (normalized_x_d*(normalized_x_d - normalized_x_c)                                         # noqa: E501
+                                                                     + normalized_x_d*(1 - normalized_x_d)/normalized_x_c*normalized_c_c)/(1 - normalized_x_c) - normalized_c_c, 1 - normalized_c_c)))    # noqa: E501
     return normalized_concentration_diff
 
 
@@ -379,9 +392,9 @@ def stoic(normalized_c_c, normalized_x_c, normalized_x_d):
     Returns:
         ndarray: Normalized concentration difference c_norm_d - c_norm_C.
     """
-    normalized_concentration_diff = np.maximum(0, np.where(normalized_c_c < normalized_x_c*(normalized_x_d - normalized_x_c)/(normalized_x_c + normalized_x_d + 2*normalized_x_d*normalized_x_d - 4*normalized_x_d*normalized_x_c), normalized_x_d*(1 - 3*normalized_x_c + 2*normalized_x_d)/(normalized_x_c*(1 - normalized_x_c)) - normalized_c_c,
-                                                           np.where(normalized_c_c < normalized_x_c, (normalized_x_d - normalized_x_c + (1 - normalized_x_d)*normalized_c_c)/(1 - normalized_x_c) - normalized_c_c,
-                                                                    np.where(normalized_c_c < normalized_x_c/normalized_x_d*(1 + normalized_x_d - normalized_x_c), (normalized_x_d*(normalized_x_d - normalized_x_c) + normalized_x_d*(1 - normalized_x_d)/normalized_x_c*normalized_c_c)/(1 - normalized_x_c) - normalized_c_c, 1 - normalized_c_c))))
+    normalized_concentration_diff = np.maximum(0, np.where(normalized_c_c < normalized_x_c*(normalized_x_d - normalized_x_c)/(normalized_x_c + normalized_x_d + 2*normalized_x_d*normalized_x_d - 4*normalized_x_d*normalized_x_c), normalized_x_d*(1 - 3*normalized_x_c + 2*normalized_x_d)/(normalized_x_c*(1 - normalized_x_c)) - normalized_c_c,     # noqa: E501
+                                                           np.where(normalized_c_c < normalized_x_c, (normalized_x_d - normalized_x_c + (1 - normalized_x_d)*normalized_c_c)/(1 - normalized_x_c) - normalized_c_c,                                                                                                                                      # noqa: E501
+                                                                    np.where(normalized_c_c < normalized_x_c/normalized_x_d*(1 + normalized_x_d - normalized_x_c), (normalized_x_d*(normalized_x_d - normalized_x_c) + normalized_x_d*(1 - normalized_x_d)/normalized_x_c*normalized_c_c)/(1 - normalized_x_c) - normalized_c_c, 1 - normalized_c_c))))  # noqa: E501
     return normalized_concentration_diff
 
 

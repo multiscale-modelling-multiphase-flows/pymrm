@@ -1,8 +1,10 @@
 """
 Operators Submodule for pymrm
 
-This submodule provides numerical operators for spatial discretization, including gradient and divergence operatorss. 
-These operators are essential for constructing finite difference and finite volume schemes used in multiphase reactor modeling.
+This submodule provides numerical operators for spatial discretization,
+including gradient and divergence operatorss.
+These operators are essential for constructing finite difference
+and finite volume schemes used in multiphase reactor modeling.
 
 Functions:
 - construct_grad: Constructs the gradient matrix for spatial differentiation.
@@ -22,6 +24,7 @@ import numpy as np
 from scipy.sparse import csc_array
 from pymrm.helpers import unwrap_bc
 from pymrm.grid import generate_grid
+
 
 def construct_grad(shape, x_f, x_c=None, bc=(None, None), axis=0):
     """
@@ -73,8 +76,9 @@ def construct_grad_int(shape, x_f, x_c=None, axis=0):
         axis += len(shape)
     shape_t = [math.prod(shape[:axis]),  math.prod(shape[axis:axis+1]), math.prod(shape[axis + 1:])]
 
-    i_f = (shape_t[1]+1) * shape_t[2] * np.arange(shape_t[0]).reshape(-1, 1, 1, 1) + shape_t[2] * np.arange(shape_t[1]).reshape((
-        1, -1, 1, 1)) + np.arange(shape_t[2]).reshape((1, 1, -1, 1)) + np.array([0, shape_t[2]]).reshape((1, 1, 1, -1))
+    i_f = ((shape_t[1]+1) * shape_t[2] * np.arange(shape_t[0]).reshape(-1, 1, 1, 1)
+           + shape_t[2] * np.arange(shape_t[1]).reshape((1, -1, 1, 1))
+           + np.arange(shape_t[2]).reshape((1, 1, -1, 1)) + np.array([0, shape_t[2]]).reshape((1, 1, 1, -1)))
 
     if x_c is None:
         x_c = 0.5*(x_f[:-1] + x_f[1:])
@@ -89,6 +93,7 @@ def construct_grad_int(shape, x_f, x_c=None, axis=0):
     grad_matrix = csc_array((values.ravel(), i_f.ravel(), range(0, i_f.size + 1, 2)),
                             shape=(shape_t[0]*(shape_t[1]+1)*shape_t[2], shape_t[0]*shape_t[1]*shape_t[2]))
     return grad_matrix
+
 
 def construct_grad_bc(shape, x_f, x_c=None, bc=(None, None), axis=0):
     """
@@ -142,8 +147,8 @@ def construct_grad_bc(shape, x_f, x_c=None, bc=(None, None), axis=0):
         alpha_2_right = -(x_c[0] - x_f[1]) / (
             (x_f[0] - x_f[1]) * (x_f[0] - x_c[0]))
         alpha_0_right = alpha_1 - alpha_2_right
-        fctr = ((b[0] + alpha_0_left * a[0]) * (b[1] +
-                                            alpha_0_right * a[1]) - alpha_2_left * alpha_2_right * a[0] * a[1])
+        fctr = ((b[0] + alpha_0_left * a[0]) * (b[1]
+                + alpha_0_right * a[1]) - alpha_2_left * alpha_2_right * a[0] * a[1])
         np.divide(1, fctr, out=fctr, where=(fctr != 0))
         value = alpha_1 * \
             b[0] * (a[1] * (alpha_0_right - alpha_2_left) + b[1]) * \
@@ -164,17 +169,19 @@ def construct_grad_bc(shape, x_f, x_c=None, bc=(None, None), axis=0):
                  b[0]) * d[1] + alpha_2_right * b[1] * d[0]) * fctr + np.zeros(shape_bc)
         values_bc[:, 1, :] = np.reshape(value, shape_bc_d)
     else:
-        i_c = shape_t[1] * shape_t[2] * np.arange(shape_t[0]).reshape(-1, 1, 1) + shape_t[2] * np.array([0, 1, shape_t[1]-2, shape_t[1]-1]).reshape((
-            1, -1, 1)) + np.arange(shape_t[2]).reshape((1, 1, -1))
-        i_f = shape_f_t[1] * shape_t[2] * np.arange(shape_t[0]).reshape(-1, 1, 1) + shape_t[2] * np.array([0, 0, shape_f_t[1]-1, shape_f_t[1]-1]).reshape((
-            1, -1, 1)) + np.arange(shape_t[2]).reshape((1, 1, -1))
+        i_c = (shape_t[1] * shape_t[2] * np.arange(shape_t[0]).reshape(-1, 1, 1)
+               + shape_t[2] * np.array([0, 1, shape_t[1]-2, shape_t[1]-1]).reshape((1, -1, 1))
+               + np.arange(shape_t[2]).reshape((1, 1, -1)))
+        i_f = (shape_f_t[1] * shape_t[2] * np.arange(shape_t[0]).reshape(-1, 1, 1)
+               + shape_t[2] * np.array([0, 0, shape_f_t[1]-1, shape_f_t[1]-1]).reshape((1, -1, 1))
+               + np.arange(shape_t[2]).reshape((1, 1, -1)))
         i_f_bc = shape_f_t[1] * shape_f_t[2] * np.arange(shape_f_t[0]).reshape((-1, 1, 1)) + shape_f_t[2] * np.array(
             [0, shape_f_t[1]-1]).reshape((1, -1, 1)) + np.arange(shape_f_t[2]).reshape((1, 1, -1))
         values_bc = np.zeros((shape_t[0], 2, shape_t[2]))
         values = np.zeros((shape_t[0], 4, shape_t[2]))
         if x_c is None:
             x_c = 0.5*np.array([x_f[0] + x_f[1], x_f[1] + x_f[2],
-                                        x_f[-3] + x_f[-2], x_f[-2] + x_f[-1]])
+                                x_f[-3] + x_f[-2], x_f[-2] + x_f[-1]])
 
         # Get a, b, and d for left bc from dictionary
         a, b, d = unwrap_bc(shape, bc[0])

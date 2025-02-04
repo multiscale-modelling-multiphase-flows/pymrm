@@ -6,9 +6,19 @@ build-backend = "setuptools.build_meta"
 name = "pymrm"
 dynamic = ["version"]  # Uses setuptools_scm for versioning
 dependencies = [
+    "pip>=24.0",
     "numpy>=1.26",
     "scipy>=1.13",
-    "numba>=0.58"
+    "numba>=0.58",
+    "pandas>=2.2",
+    "matplotlib>=3.8",
+    "ipython>=8.20",
+    "ipykernel>=6.28",
+    "pytest>=8.3.4",
+    "pytest-cov",
+    "sphinx",
+    "sphinx_rtd_theme",
+    "nbclient"
 ]
 authors = [
     {name = "E.A.J.F. Peters", email = "e.a.j.f.peters@tue.nl"},
@@ -21,6 +31,7 @@ maintainers = [
 ]
 description = "Functions for multiphase reactor modeling"
 readme = "README.md"
+license = {file = "LICENSE"}
 keywords = ["MRM", "modeling", "multiphase", "diffusion", "convection"]
 requires-python = ">=3.10"
 
@@ -34,13 +45,18 @@ classifiers = [
     "Topic :: Scientific/Engineering"
 ]
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["pymrm*"]  # ✅ Correct inclusion of the pymrm package
-
 [tool.setuptools_scm]
-write_to = "pymrm/_version.py"
+write_to = "src/pymrm/_version.py"
 
 [project.urls]
 Homepage = "https://multiscale-modelling-multiphase-flows.github.io/pymrm-book"
 Repository = "https://github.com/multiscale-modelling-multiphase-flows/pymrm"
+
+[tool.pytest.ini_options]
+addopts = [
+    "--import-mode=importlib",
+]
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning"
+]
