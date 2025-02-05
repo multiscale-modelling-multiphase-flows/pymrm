@@ -15,29 +15,28 @@ Submodules:
 - numjac: Numerical Jacobian construction for nonlinear systems.
 
 Example Usage:
-:::{code-cell} python
-:execution: false
-import numpy as np
-import matplotlib.pyplot as plt
-from pymrm import construct_grad, construct_div
+.. code-block:: python
 
-# Define the grid
-shape = (100,)
-x_f = np.linspace(0, 1, shape[0]+1)
-x_c = 0.5*(x_f[1:] + x_f[:-1])
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from pymrm import construct_grad, construct_div
 
-# Set boundary conditions
-bc_L = {a: 0, b:1, d:1}
-bc_R = {a: 0, b:1, d:0}
-grad_mat, grad_bc = construct_grad(shape, x_f, x_c, bc=(bc_L, bc_R))
-div_mat = construct_div(shape, x_f)
-lapl_mat = div_mat @ grad_mat
-lapl_bc = div_mat @ grad_bc
+    # Define the grid
+    shape = (100,)
+    x_f = np.linspace(0, 1, shape[0]+1)
+    x_c = 0.5*(x_f[1:] + x_f[:-1])
 
-c = np.zeros(shape)
-c[:] = lapl_mat.solve(lapl_bc)
-plt.plot(x_c, c)
-:::
+    # Set boundary conditions
+    bc_L = {a: 0, b:1, d:1}
+    bc_R = {a: 0, b:1, d:0}
+    grad_mat, grad_bc = construct_grad(shape, x_f, x_c, bc=(bc_L, bc_R))
+    div_mat = construct_div(shape, x_f)
+    lapl_mat = div_mat @ grad_mat
+    lapl_bc = div_mat @ grad_bc
+
+    c = np.zeros(shape)
+    c[:] = lapl_mat.solve(lapl_bc)
+    plt.plot(x_c, c)
 
 Authors:
 - E.A.J.F. Peters

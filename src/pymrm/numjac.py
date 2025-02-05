@@ -160,8 +160,7 @@ def iterate_over_entries(shape_in, shape_out, shape_rel, idx_in, idx_out, row_in
     Iterate over all valid relative entries defined by shape_rel and fill row_indices and col_indices.
     This function:
     - Interprets shape_rel as the size of the relative axes.
-    - For each combination of relative indices (idx_rel), computes the absolute positions (idx_out, idx_in)
-      by adding idx_rel to idx_out and idx_in and applying periodicity.
+    - For each combination of relative indices (idx_rel), computes the absolute positions (idx_out, idx_in) by adding idx_rel to idx_out and idx_in and applying periodicity.
     - Stores the computed flat indices in row_indices and col_indices.
 
     Args:
@@ -213,9 +212,7 @@ def generate_sparsity_pattern(shape_in, shape_out, dependencies):
     Parameters:
     - shape_in: Tuple of ints, the shape of the multidimensional array corresponding to the field.
     - shape_out: Tuple of ints, the shape of the multidimensional array corresponding to the function.
-    - dependencies: A list of tuples (idx_out, idx_in, fixed_axes, periodic_axes)
-      representing the stencil pattern. Each dependency indicates how output positions
-      relate to input positions and which axes are fixed or periodic.
+    - dependencies: A list of tuples (idx_out, idx_in, fixed_axes, periodic_axes) representing the stencil pattern. Each dependency indicates how output positions relate to input positions and which axes are fixed or periodic.
 
     Returns:
     - row_indices: 1D numpy array of row indices for the sparse pattern.

@@ -18,7 +18,8 @@ dependencies = [
     "pytest-cov",
     "sphinx",
     "sphinx_rtd_theme",
-    "nbclient"
+    "nbclient",
+    "myst-parser"
 ]
 authors = [
     {name = "E.A.J.F. Peters", email = "e.a.j.f.peters@tue.nl"},
