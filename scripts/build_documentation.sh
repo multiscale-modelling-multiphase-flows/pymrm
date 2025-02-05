@@ -3,6 +3,7 @@
 # The commands provided here will be executed for building the documentation in the ci
 # but may also be used locally
 
+pip install myst-parser # workaround. Should be included in Docker image?
 cd docs/sphinx
 make html 2>documentation_errors.txt
 num_warnings=$(wc -l < documentation_errors.txt)
