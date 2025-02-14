@@ -285,7 +285,7 @@ def create_staggered_array(array, shape, axis, x_f=None, x_c=None):
             shape_new[axis] = -1
         else:
             for i in range(len(shape)-1, -1, -1):
-                if array.size == shape[axis]:
+                if array.size == shape[i]:
                     shape_new[i] = shape[i]
                     break
         array = array.reshape(shape_new)
