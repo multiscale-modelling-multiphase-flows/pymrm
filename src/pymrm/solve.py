@@ -10,7 +10,7 @@ from scipy.sparse import linalg
 from scipy.linalg import norm
 from scipy.optimize import OptimizeResult
 
-def newton(function, initial_guess, args=(), tolerance=1.49012e-08, max_iterations=100, solver=None, callback=None):
+def newton(function, initial_guess, args=(), tol=1.49012e-08, maxfev=100, solver=None, callback=None):
     """
     Perform Newton-Raphson iterations to solve nonlinear systems.
 
@@ -18,8 +18,8 @@ def newton(function, initial_guess, args=(), tolerance=1.49012e-08, max_iteratio
         function (callable): Function returning the residual and Jacobian.
         initial_guess (ndarray): Initial guess for the solution.
         args (tuple, optional): Additional arguments for the function.
-        tolerance (float, optional): Convergence criterion. Default is 1.49012e-08.
-        max_iterations (int, optional): Maximum iterations allowed. Default is 100.
+        tol (float, optional): Convergence criterion. Default is 1.49012e-08.
+        maxfev (int, optional): Maximum iterations allowed. Default is 100.
         solver (str, optional): Linear solver to use ('spsolve', 'cg', 'bicgstab').
         callback (callable, optional): Function called after each iteration.
 
@@ -49,17 +49,17 @@ def newton(function, initial_guess, args=(), tolerance=1.49012e-08, max_iteratio
         raise ValueError("Unsupported solver method.")
 
     x = initial_guess.copy()
-    for it in range(max_iterations):
+    for it in range(int(maxfev)):
         g, jac_matrix = function(x, *args)
         dx_neg = linsolver(jac_matrix, g)
         defect = norm(dx_neg, ord=np.inf)
         x -= dx_neg.reshape(x.shape)
         if callback:
             callback(x, g)
-        if defect < tolerance:
+        if defect < tol:
             return OptimizeResult({'x': x, 'success': True, 'nit': it + 1, 'fun': g, 'message': 'Converged'})
 
-    return OptimizeResult({'x': x, 'success': False, 'nit': max_iterations, 'fun': g, 'message': 'Did not converge'})
+    return OptimizeResult({'x': x, 'success': False, 'nit': maxfev, 'fun': g, 'message': 'Did not converge'})
 
 def clip_approach(values, function, lower_bounds=0, upper_bounds=None, factor=0):
     """
