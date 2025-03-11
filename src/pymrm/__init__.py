@@ -50,21 +50,23 @@ License: MIT License
 from .grid import generate_grid, non_uniform_grid
 from .operators import construct_grad, construct_grad_int, construct_grad_bc, construct_div
 from .convect import (
-    construct_convflux_upwind, construct_convflux_upwind_int, construct_convflux_upwind_bc,
+    construct_convflux_upwind, construct_convflux_upwind_int, construct_convflux_bc,
     upwind, minmod, osher, clam, muscl, smart, stoic, vanleer
 )
-from .interpolate import interp_stagg_to_cntr, interp_cntr_to_stagg, interp_cntr_to_stagg_tvd, create_staggered_array
+from .interpolate import interp_stagg_to_cntr, interp_cntr_to_stagg, interp_cntr_to_stagg_tvd, create_staggered_array, compute_boundary_values
 from .solve import newton, clip_approach
 from .numjac import NumJac, stencil_block_diagonals
-from .helpers import unwrap_bc, construct_coefficient_matrix
+from .coupling import update_csc_array_indices, translate_indices_to_larger_array
+from .helpers import unwrap_bc_coeff, construct_coefficient_matrix
 
 __all__ = [
     "generate_grid", "non_uniform_grid",
     "construct_grad", "construct_grad_int", "construct_grad_bc", "construct_div",
-    "construct_convflux_upwind", "construct_convflux_upwind_int", "construct_convflux_upwind_bc",
+    "construct_convflux_upwind", "construct_convflux_upwind_int", "construct_convflux_bc",
     "upwind", "minmod", "osher", "clam", "muscl", "smart", "stoic", "vanleer",
-    "interp_stagg_to_cntr", "interp_cntr_to_stagg", "interp_cntr_to_stagg_tvd",
+    "interp_stagg_to_cntr", "interp_cntr_to_stagg", "interp_cntr_to_stagg_tvd", "create_staggered_array", "compute_boundary_values",
     "newton", "clip_approach",
+    "update_csc_array_indices", "translate_indices_to_larger_array",
     "NumJac", "stencil_block_diagonals",
     "construct_coefficient_matrix"
 ]
