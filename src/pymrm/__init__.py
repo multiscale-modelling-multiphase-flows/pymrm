@@ -56,7 +56,7 @@ from .convect import (
 from .interpolate import interp_stagg_to_cntr, interp_cntr_to_stagg, interp_cntr_to_stagg_tvd, create_staggered_array, compute_boundary_values
 from .solve import newton, clip_approach
 from .numjac import NumJac, stencil_block_diagonals
-from .coupling import update_csc_array_indices, translate_indices_to_larger_array
+from .coupling import update_csc_array_indices, translate_indices_to_larger_array, construct_interface_matrices
 from .helpers import unwrap_bc_coeff, construct_coefficient_matrix
 
 __all__ = [
@@ -66,7 +66,7 @@ __all__ = [
     "upwind", "minmod", "osher", "clam", "muscl", "smart", "stoic", "vanleer",
     "interp_stagg_to_cntr", "interp_cntr_to_stagg", "interp_cntr_to_stagg_tvd", "create_staggered_array", "compute_boundary_values",
     "newton", "clip_approach",
-    "update_csc_array_indices", "translate_indices_to_larger_array",
+    "update_csc_array_indices", "translate_indices_to_larger_array", "construct_interface_matrices",
     "NumJac", "stencil_block_diagonals",
     "construct_coefficient_matrix"
 ]
