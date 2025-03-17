@@ -130,7 +130,7 @@ def update_csc_array_indices(sparse_mat, shape, new_shape, offset=None):
 
 def construct_interface_matrices(shapes, x_fs, x_cs=(None, None), 
                                  ic=({'a': (1,1), 'b': (0,0), 'd': 0}, {'a': (0,0), 'b': (1,-1), 'd': 0}), 
-                                 axis=0):
+                                 axis=0, shapes_d = (None, None)):
     """
     Construct sparse matrices for computing interface conditions between two coupled subdomains.
 
@@ -214,7 +214,6 @@ def construct_interface_matrices(shapes, x_fs, x_cs=(None, None),
     v = [[None for _ in range(4)] for _ in range(2)]
     m_inv = [[None for _ in range(2)] for _ in range(2)]
     values = [[None for _ in range(4)] for _ in range(2)]
-    values_bc = [None for _ in range(2)]
     for i in range(2): # loop over the two conditions
         m[i][0] = a[i][0]*alpha_0[0] + b[i][0]
         m[i][1] = a[i][1]*alpha_0[1] + b[i][1]
@@ -233,19 +232,46 @@ def construct_interface_matrices(shapes, x_fs, x_cs=(None, None),
             values[j][i] = m_inv[j][0]*v[0][i] + m_inv[j][1]*v[1][i]
             values[j][i] = np.broadcast_to(values[j][i], shape_i)
         values[j] = np.concatenate(values[j], axis=axis)
-        values_bc[j] = m_inv[j][0]*d[0] + m_inv[j][1]*d[1]
-        values_bc[j] = np.broadcast_to(values_bc[j], shape_i)
-    
+   
     shape_t = [math.prod(shape[0:axis]), shape[axis], math.prod(shape[axis+1:])]
     row_indices = shape_t[2] * np.arange(shape_t[0]).reshape((-1, 1, 1)) + np.zeros((1, 4, 1)) + np.arange(shape_t[2]).reshape((1, 1, -1))
     col_indices = shape_t[1]*shape_t[2] * np.arange(shape_t[0]).reshape((-1, 1, 1)) + shape_t[2]*(shapes[0][axis] + np.array([-2,-1,0,1])).reshape((1,4,1)) + np.arange(shape_t[2]).reshape((1, 1, -1))
-    row_indices_bc = shape_t[2] * np.arange(shape_t[0]).reshape((-1, 1)) + np.arange(shape_t[2]).reshape((1, -1))
 
     # Create the sparse matrix representing the interface
     interface_matrix = [None]*2
-    interface_bc = [None]*2
     for j in range(2):
-        interface_matrix[j] = csc_array((values[j].ravel(), (row_indices.ravel(), col_indices.ravel())), shape=(shape_t[0]*shape_t[2], math.prod(shape_t)))
-        interface_bc[j] = csc_array((values_bc[j].ravel(), row_indices_bc.ravel(), [0,row_indices_bc.size]), shape=(shape_t[0]*shape_t[2], 1))
-
-    return interface_matrix[0], interface_bc[0], interface_matrix[1], interface_bc[1]
+        fltr = (values[j].ravel() != 0)
+        values_filtered = values[j].ravel()[fltr]
+        row_indices_filtered = row_indices.ravel()[fltr]
+        col_indices_filtered = col_indices.ravel()[fltr]
+        interface_matrix[j] = csc_array((values_filtered, (row_indices_filtered, col_indices_filtered)), shape=(shape_t[0]*shape_t[2], math.prod(shape_t)))
+    
+    row_indices_bc = shape_t[2] * np.arange(shape_t[0]).reshape((-1, 1)) + np.arange(shape_t[2]).reshape((1, -1))    
+    if (shapes_d[0] is None and shapes_d[1] is None):
+        interface_bc = [None]*2
+        for j in range(2):
+            values_bc = m_inv[j][0]*d[0] + m_inv[j][1]*d[1]
+            values_bc = np.broadcast_to(values_bc, shape_i)
+            fltr = (values_bc.ravel() != 0)
+            values_filtered = values_bc.ravel()[fltr]
+            row_indices_filtered = row_indices_bc.ravel()[fltr]
+            interface_bc[j] = csc_array((values_filtered, row_indices_filtered, [0,row_indices_filtered.size]), shape=(shape_t[0]*shape_t[2], 1))
+        return interface_matrix[0], interface_bc[0], interface_matrix[1], interface_bc[1]
+    else:
+        interface_bc = [[None for _ in range(2)] for _ in range(2)]
+        for j in range(2):
+            for i in range(2):
+                values_bc = m_inv[j][i]*d[i]
+                values_bc = np.broadcast_to(values_bc, shape_i)
+                fltr = (values_bc.ravel() != 0)
+                values_filtered = values_bc.ravel()[fltr]
+                row_indices_filtered = row_indices_bc.ravel()[fltr]
+                if shapes_d[j] is None:
+                    interface_bc[j][i] = csc_array((values_filtered, row_indices_filtered, [0,row_indices_filtered.size]), shape=(shape_t[0]*shape_t[2], 1))
+                else:
+                    num_cols = math.prod(shapes_d[j])
+                    col_indices_bc = np.arange(num_cols,dtype=int).reshape(shapes_d[j])
+                    col_indices_bc = np.broadcast_to(col_indices_bc, shape_i)
+                    col_indices_filtered = col_indices_bc.ravel()[fltr]
+                    interface_bc[j][i] = csc_array((values_filtered, (row_indices_filtered, col_indices_filtered)), shape=(shape_t[0]*shape_t[2], num_cols))
+        return interface_matrix[0], interface_bc[0][0], interface_bc[0][1], interface_matrix[1], interface_bc[1][0],  interface_bc[1][1]

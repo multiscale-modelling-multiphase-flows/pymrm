@@ -231,12 +231,14 @@ def construct_grad_bc(shape, x_f, x_c=None, bc=(None, None), axis=0, shapes_d=(N
         return grad_matrix, grad_bc
     else:
         grad_bc = [None]*2
-        shapes_d = list(shapes_d)
         for i in range(2):
             if shapes_d[i] is None:
-                shapes_d[i] = (1,)*len(shape_bc)
-            num_cols = math.prod(shapes_d[i])
-            i_cols_bc = np.arange(num_cols,dtype=int).reshape(shapes_d[i])
+                shape_d = (1,)*len(shape_bc)
+                num_cols = 1
+            else:
+                shape_d = shapes_d[i]
+                num_cols = math.prod(shape_d)
+            i_cols_bc = np.arange(num_cols,dtype=int).reshape(shape_d)
             i_cols_bc = np.broadcast_to(i_cols_bc, shape_bc)
             grad_bc[i] = csc_array((values_bc[:,i,:].ravel(), (i_f_bc[:,i,:].ravel(), i_cols_bc.ravel())),
                         shape=(math.prod(shape_f_t), num_cols))
