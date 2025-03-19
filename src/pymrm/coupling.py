@@ -16,6 +16,7 @@ dynamics and other numerical simulations requiring domain decomposition.
 """
 
 import math
+import numbers
 import numpy as np
 from scipy.sparse import csc_array
 from pymrm.helpers import unwrap_bc_coeff
@@ -91,16 +92,16 @@ def update_csc_array_indices(sparse_mat, shape, new_shape, offset=None):
 
     # Translate row and column indices to the larger ND array
     shape = tuple(shape)
-    if all(isinstance(dim, int) for dim in shape):
+    if all(isinstance(dim, numbers.Integral) for dim in shape):
         shape = (shape,shape)
     new_shape = tuple(new_shape)
-    if all(isinstance(dim, int) for dim in new_shape):
+    if all(isinstance(dim, numbers.Integral) for dim in new_shape):
         new_shape = (new_shape,new_shape)
     if offset is None:
         offset = (None, None)
     else:
         offset = tuple(offset)
-        if all(isinstance(dim, int) for dim in offset):
+        if all(isinstance(dim, numbers.Integral) for dim in offset):
             offset = (offset,offset)
     
     if (shape[0] is None) or (new_shape[0] is None):
@@ -110,18 +111,13 @@ def update_csc_array_indices(sparse_mat, shape, new_shape, offset=None):
         num_rows = np.prod(new_shape[0])
     
     if (shape[1] is None) or (new_shape[1] is None):
-        new_col_indices = original_linear_cols
+        new_col_pointers = col_pointers
     else:
         new_col_indices = translate_indices_to_larger_array(original_linear_cols, shape[1], new_shape[1], offset[1])
         num_cols = math.prod(new_shape[1])
-
-    # Compute new column pointers by shifting to account for empty columns
-    
-    new_col_pointers = np.zeros(num_cols + 1, dtype=int)
-    new_col_pointers[new_col_indices + 1] = np.diff(col_pointers)
-
-    # Convert counts to cumulative sum for proper CSC format
-    new_col_pointers = np.cumsum(new_col_pointers)
+        new_col_pointers = np.zeros(num_cols + 1, dtype=int)
+        new_col_pointers[new_col_indices + 1] = np.diff(col_pointers)
+        new_col_pointers = np.cumsum(new_col_pointers)
 
     # Create a new sparse matrix with the corrected 2D shape
     updated_mat = csc_array((data, new_row_indices, new_col_pointers), shape=(num_rows, num_cols))
