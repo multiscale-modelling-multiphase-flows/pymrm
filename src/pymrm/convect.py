@@ -21,7 +21,7 @@ Dependencies:
 - numpy
 - scipy.sparse (for csc_array)
 - pymrm.grid (for optional grid generation)
-- pymrm.helper (for boundary condition handling)
+- pymrm.helpers (for boundary condition handling)
 """
 
 import math
@@ -34,19 +34,20 @@ from .helpers import unwrap_bc_coeff
 
 def construct_convflux_upwind(shape, x_f, x_c=None, bc=(None, None), v=1.0, axis=0, shapes_d=(None, None)):
     """
-    Construct the convective flux matrix using the upwind scheme.
+    Constructs the convective flux matrix using the upwind scheme.
 
     Args:
-        shape (tuple): Shape of the multi-dimensional array.
+        shape (tuple or int): Shape of the multi-dimensional array. If an integer is provided, it is treated as 1D.
         x_f (ndarray): Face positions.
         x_c (ndarray, optional): Cell positions. If not provided, it will be calculated based on the face array.
-        bc (tuple, optional): The boundary conditions. Default is (None, None).
-        v (ndarray): Velocities on face positions.
+        bc (tuple, optional): Boundary conditions as a tuple of dictionaries for left and right boundaries. Default is (None, None).
+        v (float or ndarray): Velocities on face positions. Can be a scalar or an array.
         axis (int, optional): The axis along which the convection takes place. Default is 0.
+        shapes_d (tuple, optional): Shapes for boundary condition matrices. Default is (None, None).
 
     Returns:
-        csc_array: The convective flux matrix (conv_matrix).
-        csc_array: The convective flux matrix for boundary conditions (conv_bc).
+        csc_array: Convective flux matrix for internal faces.
+        csc_array: Convective flux matrix for boundary conditions.
     """
     if isinstance(shape, int):
         shape = (shape,)
@@ -73,15 +74,15 @@ def construct_convflux_upwind(shape, x_f, x_c=None, bc=(None, None), v=1.0, axis
 
 def construct_convflux_upwind_int(shape, v=1.0, axis=0):
     """
-    Construct the convective flux matrix for internal faces using the upwind scheme.
+    Constructs the convective flux matrix for internal faces using the upwind scheme.
 
     Args:
-        shape (tuple): Shape of the ndarrays.
-        v (float, ndarray): The velocity array.
+        shape (tuple): Shape of the multi-dimensional array.
+        v (float or ndarray): Velocity array. Can be a scalar or an array.
         axis (int, optional): The axis along which the numerical differentiation is performed. Default is 0.
 
     Returns:
-        csc_array: The convective flux matrix (conv_matrix).
+        csc_array: Convective flux matrix for internal faces.
     """
     if not isinstance(shape, (list, tuple)):
         shape_f = [shape]
@@ -116,19 +117,20 @@ def construct_convflux_upwind_int(shape, v=1.0, axis=0):
 
 def construct_convflux_bc(shape, x_f, x_c=None, bc=(None, None), v=1.0, axis=0, shapes_d=(None, None)):
     """
-    Construct the convective flux matrix for the boundary faces using the upwind scheme.
+    Constructs the convective flux matrix for boundary faces using the upwind scheme.
 
     Args:
         shape (tuple): Shape of the multi-dimensional array.
         x_f (ndarray): Face positions.
         x_c (ndarray, optional): Cell-centered positions. If not provided, it is calculated based on the face array.
-        bc (tuple, optional): A tuple containing the left and right boundary conditions. Default is (None, None).
-        v (float, ndarray): The velocity array.
+        bc (tuple, optional): Boundary conditions as a tuple of dictionaries for left and right boundaries. Default is (None, None).
+        v (float or ndarray): Velocity array. Can be a scalar or an array.
         axis (int, optional): The axis along which the numerical differentiation is performed. Default is 0.
+        shapes_d (tuple, optional): Shapes for boundary condition matrices. Default is (None, None).
 
     Returns:
-        csc_array: The convective flux matrix (conv_matrix).
-        csc_array: The convective flux matrix for boundary conditions (conv_bc).
+        csc_array: Convective flux matrix for internal faces.
+        csc_array: Convective flux matrix for boundary conditions.
     """
 
     # Trick: Reshape to triplet shape_t
@@ -300,15 +302,15 @@ def construct_convflux_bc(shape, x_f, x_c=None, bc=(None, None), v=1.0, axis=0, 
 
 def upwind(normalized_c_c, normalized_x_c, normalized_x_d):
     """
-    Apply the upwind TVD limiter to reduce oscillations in numerical schemes.
+    Applies the upwind TVD limiter to reduce oscillations in numerical schemes.
 
     Args:
         normalized_c_c (ndarray): Normalized concentration at cell centers.
         normalized_x_c (ndarray): Normalized position of cell centers.
-        normalized_x_d (ndarray): Normalized position of down-wind face.
+        normalized_x_d (ndarray): Normalized position of downwind face.
 
     Returns:
-        ndarray: Normalized concentration difference c_norm_d - c_norm_C.
+        ndarray: Normalized concentration difference (c_norm_d - c_norm_C).
     """
     normalized_concentration_diff = np.zeros_like(
         normalized_c_c)
@@ -317,15 +319,15 @@ def upwind(normalized_c_c, normalized_x_c, normalized_x_d):
 
 def minmod(normalized_c_c, normalized_x_c, normalized_x_d):
     """
-    Apply the Minmod TVD limiter to reduce oscillations in numerical schemes.
+    Applies the Minmod TVD limiter to reduce oscillations in numerical schemes.
 
     Args:
         normalized_c_c (ndarray): Normalized concentration at cell centers.
         normalized_x_c (ndarray): Normalized position of cell centers.
-        normalized_x_d (ndarray): Normalized position of down-wind face.
+        normalized_x_d (ndarray): Normalized position of downwind face.
 
     Returns:
-        ndarray: Normalized concentration difference c_norm_d - c_norm_C.
+        ndarray: Normalized concentration difference (c_norm_d - c_norm_C).
     """
     normalized_concentration_diff = np.maximum(0, (normalized_x_d-normalized_x_c)*np.minimum(
         normalized_c_c/normalized_x_c, (1-normalized_c_c)/(1-normalized_x_c)))
@@ -334,15 +336,15 @@ def minmod(normalized_c_c, normalized_x_c, normalized_x_d):
 
 def osher(normalized_c_c, normalized_x_c, normalized_x_d):
     """
-    Apply the Osher TVD limiter to reduce oscillations in numerical schemes.
+    Applies the Osher TVD limiter to reduce oscillations in numerical schemes.
 
     Args:
         normalized_c_c (ndarray): Normalized concentration at cell centers.
         normalized_x_c (ndarray): Normalized position of cell centers.
-        normalized_x_d (ndarray): Normalized position of down-wind face.
+        normalized_x_d (ndarray): Normalized position of downwind face.
 
     Returns:
-        ndarray: Normalized concentration difference c_norm_d - c_norm_C.
+        ndarray: Normalized concentration difference (c_norm_d - c_norm_C).
     """
     normalized_concentration_diff = np.maximum(0, np.where(normalized_c_c < normalized_x_c/normalized_x_d,
                                                (normalized_x_d/normalized_x_c - 1)*normalized_c_c, 1 - normalized_c_c))
@@ -351,15 +353,15 @@ def osher(normalized_c_c, normalized_x_c, normalized_x_d):
 
 def clam(normalized_c_c, normalized_x_c, normalized_x_d):
     """
-    Apply the CLAM TVD limiter to reduce oscillations in numerical schemes.
+    Applies the CLAM TVD limiter to reduce oscillations in numerical schemes.
 
     Args:
         normalized_c_c (ndarray): Normalized concentration at cell centers.
         normalized_x_c (ndarray): Normalized position of cell centers.
-        normalized_x_d (ndarray): Normalized position of down-wind face.
+        normalized_x_d (ndarray): Normalized position of downwind face.
 
     Returns:
-        ndarray: Normalized concentration difference c_norm_d - c_norm_C.
+        ndarray: Normalized concentration difference (c_norm_d - c_norm_C).
     """
     normalized_concentration_diff = np.maximum(0, np.where(normalized_c_c < normalized_x_c/normalized_x_d,
                                                (normalized_x_d/normalized_x_c - 1)*normalized_c_c, 1 - normalized_c_c))
@@ -368,15 +370,15 @@ def clam(normalized_c_c, normalized_x_c, normalized_x_d):
 
 def muscl(normalized_c_c, normalized_x_c, normalized_x_d):
     """
-    Apply the MUSCL TVD limiter to reduce oscillations in numerical schemes.
+    Applies the MUSCL TVD limiter to reduce oscillations in numerical schemes.
 
     Args:
         normalized_c_c (ndarray): Normalized concentration at cell centers.
         normalized_x_c (ndarray): Normalized position of cell centers.
-        normalized_x_d (ndarray): Normalized position of down-wind face.
+        normalized_x_d (ndarray): Normalized position of downwind face.
 
     Returns:
-        ndarray: Normalized concentration difference c_norm_d - c_norm_C.
+        ndarray: Normalized concentration difference (c_norm_d - c_norm_C).
     """
     normalized_concentration_diff = np.maximum(0, np.where(normalized_c_c < normalized_x_c/(2*normalized_x_d), ((2*normalized_x_d - normalized_x_c)/normalized_x_c - 1)*normalized_c_c,  # noqa: E501
                                                            np.where(normalized_c_c < 1 + normalized_x_c - normalized_x_d, normalized_x_d - normalized_x_c, 1 - normalized_c_c)))         # noqa: E501
@@ -385,15 +387,15 @@ def muscl(normalized_c_c, normalized_x_c, normalized_x_d):
 
 def smart(normalized_c_c, normalized_x_c, normalized_x_d):
     """
-    Apply the SMART TVD limiter to reduce oscillations in numerical schemes.
+    Applies the SMART TVD limiter to reduce oscillations in numerical schemes.
 
     Args:
         normalized_c_c (ndarray): Normalized concentration at cell centers.
         normalized_x_c (ndarray): Normalized position of cell centers.
-        normalized_x_d (ndarray): Normalized position of down-wind face.
+        normalized_x_d (ndarray): Normalized position of downwind face.
 
     Returns:
-        ndarray: Normalized concentration difference c_norm_d - c_norm_C.
+        ndarray: Normalized concentration difference (c_norm_d - c_norm_C).
     """
     normalized_concentration_diff = np.maximum(0, np.where(normalized_c_c < normalized_x_c/3, (normalized_x_d*(1 - 3*normalized_x_c + 2*normalized_x_d)/(normalized_x_c*(1 - normalized_x_c)) - 1)*normalized_c_c,     # noqa: E501
                                                            np.where(normalized_c_c < normalized_x_c/normalized_x_d*(1 + normalized_x_d - normalized_x_c),     # noqa: E501
@@ -404,15 +406,15 @@ def smart(normalized_c_c, normalized_x_c, normalized_x_d):
 
 def stoic(normalized_c_c, normalized_x_c, normalized_x_d):
     """
-    Apply the STOIC TVD limiter to reduce oscillations in numerical schemes.
+    Applies the STOIC TVD limiter to reduce oscillations in numerical schemes.
 
     Args:
         normalized_c_c (ndarray): Normalized concentration at cell centers.
         normalized_x_c (ndarray): Normalized position of cell centers.
-        normalized_x_d (ndarray): Normalized position of down-wind face.
+        normalized_x_d (ndarray): Normalized position of downwind face.
 
     Returns:
-        ndarray: Normalized concentration difference c_norm_d - c_norm_C.
+        ndarray: Normalized concentration difference (c_norm_d - c_norm_C).
     """
     normalized_concentration_diff = np.maximum(0, np.where(normalized_c_c < normalized_x_c*(normalized_x_d - normalized_x_c)/(normalized_x_c + normalized_x_d + 2*normalized_x_d*normalized_x_d - 4*normalized_x_d*normalized_x_c), normalized_x_d*(1 - 3*normalized_x_c + 2*normalized_x_d)/(normalized_x_c*(1 - normalized_x_c)) - normalized_c_c,     # noqa: E501
                                                            np.where(normalized_c_c < normalized_x_c, (normalized_x_d - normalized_x_c + (1 - normalized_x_d)*normalized_c_c)/(1 - normalized_x_c) - normalized_c_c,                                                                                                                                      # noqa: E501
@@ -422,15 +424,15 @@ def stoic(normalized_c_c, normalized_x_c, normalized_x_d):
 
 def vanleer(normalized_c_c, normalized_x_c, normalized_x_d):
     """
-    Apply the van Leer TVD limiter to reduce oscillations in numerical schemes.
+    Applies the van Leer TVD limiter to reduce oscillations in numerical schemes.
 
     Args:
         normalized_c_c (ndarray): Normalized concentration at cell centers.
         normalized_x_c (ndarray): Normalized position of cell centers.
-        normalized_x_d (ndarray): Normalized position of down-wind face.
+        normalized_x_d (ndarray): Normalized position of downwind face.
 
     Returns:
-        ndarray: Normalized concentration difference c_norm_d - c_norm_C.
+        ndarray: Normalized concentration difference (c_norm_d - c_norm_C).
     """
     normalized_concentration_diff = np.maximum(0, normalized_c_c*(1-normalized_c_c)*(
         normalized_x_d-normalized_x_c)/(normalized_x_c*(1-normalized_x_c)))
