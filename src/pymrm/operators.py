@@ -2,7 +2,7 @@
 Operators Submodule for pymrm
 
 This submodule provides numerical operators for spatial discretization,
-including gradient and divergence operatorss.
+including gradient and divergence operators.
 These operators are essential for constructing finite difference
 and finite volume schemes used in multiphase reactor modeling.
 
@@ -16,7 +16,7 @@ Dependencies:
 - numpy
 - scipy.sparse
 - pymrm.grid (for optional grid generation)
-- pymrm.helper (for boundary condition handling)
+- pymrm.helpers (for boundary condition handling)
 """
 
 import math
@@ -26,21 +26,21 @@ from pymrm.helpers import unwrap_bc_coeff
 from pymrm.grid import generate_grid
 
 
-def construct_grad(shape, x_f, x_c=None, bc=(None, None), axis=0, shapes_d=(
-        None, None)):
+def construct_grad(shape, x_f, x_c=None, bc=(None, None), axis=0, shapes_d=(None, None)):
     """
-    Construct the gradient matrix.
+    Construct the gradient matrix for spatial differentiation.
 
-    Args:
-        shape (tuple): Shape of the domain.
+    Parameters:
+        shape (tuple or int): Shape of the domain. If an integer is provided, it is converted to a tuple.
         x_f (ndarray): Face positions.
-        x_c (ndarray, optional): Cell center coordinates. If not provided, it is calculated.
-        bc (tuple, optional): Boundary conditions. Default is (None, None).
+        x_c (ndarray, optional): Cell center coordinates. If not provided, they are calculated.
+        bc (tuple, optional): Boundary conditions as a tuple of dictionaries. Default is (None, None).
         axis (int, optional): Axis of differentiation. Default is 0.
+        shapes_d (tuple, optional): Shapes for boundary condition contributions. Default is (None, None).
 
     Returns:
         csc_array: Gradient matrix.
-        csc_array: Gradient contribution from boundary conditions.
+        csc_array or tuple: Gradient contribution from boundary conditions. If `shapes_d` is provided, returns a tuple.
     """
     if isinstance(shape, int):
         shape = (shape, )
@@ -70,14 +70,14 @@ def construct_grad_int(shape, x_f, x_c=None, axis=0):
     """
     Construct the gradient matrix for internal faces.
 
-    Args:
+    Parameters:
         shape (tuple): Shape of the domain.
         x_f (ndarray): Face coordinates.
-        x_c (ndarray, optional): Cell center coordinates.
+        x_c (ndarray, optional): Cell center coordinates. If not provided, they are calculated.
         axis (int, optional): Axis of differentiation. Default is 0.
 
     Returns:
-        csc_array: Gradient matrix.
+        csc_array: Gradient matrix for internal faces.
     """
     if axis < 0:
         axis += len(shape)
@@ -102,20 +102,21 @@ def construct_grad_int(shape, x_f, x_c=None, axis=0):
     return grad_matrix
 
 
-def construct_grad_bc(shape, x_f, x_c=None, bc=(None, None), axis=0, shapes_d=(None,None)): 
+def construct_grad_bc(shape, x_f, x_c=None, bc=(None, None), axis=0, shapes_d=(None, None)):
     """
     Construct the gradient matrix for boundary faces.
 
-    Args:
+    Parameters:
         shape (tuple): Shape of the domain.
         x_f (ndarray): Face coordinates.
-        x_c (ndarray, optional): Cell center coordinates.
-        bc (tuple, optional): Boundary conditions.
-        axis (int, optional): Axis of differentiation.
+        x_c (ndarray, optional): Cell center coordinates. If not provided, they are calculated.
+        bc (tuple, optional): Boundary conditions as a tuple of dictionaries. Default is (None, None).
+        axis (int, optional): Axis of differentiation. Default is 0.
+        shapes_d (tuple, optional): Shapes for boundary condition contributions. Default is (None, None).
 
     Returns:
-        csc_array: Gradient matrix for boundary conditions.
-        csc_array: Contribution of inhomogeneous boundary conditions.
+        csc_array or tuple: Gradient matrix for boundary faces and contributions from inhomogeneous boundary conditions.
+                            If `shapes_d` is provided, returns a tuple of matrices.
     """
     if axis < 0:
         axis += len(shape)
@@ -256,12 +257,12 @@ def construct_grad_bc(shape, x_f, x_c=None, bc=(None, None), axis=0, shapes_d=(N
 
 def construct_div(shape, x_f, nu=0, axis=0):
     """
-    Construct the divergence matrix.
+    Construct the divergence matrix for flux calculations.
 
-    Args:
-        shape (tuple): Shape of the domain.
+    Parameters:
+        shape (tuple or int): Shape of the domain. If an integer is provided, it is converted to a tuple.
         x_f (ndarray): Face positions.
-        nu (int or callable): Geometry factor (0: flat, 1: cylindrical, 2: spherical).
+        nu (int or callable, optional): Geometry factor (0: flat, 1: cylindrical, 2: spherical, or a callable for custom geometry). Default is 0.
         axis (int, optional): Axis along which divergence is computed. Default is 0.
 
     Returns:
