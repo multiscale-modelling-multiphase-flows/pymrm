@@ -1,3 +1,23 @@
+"""
+numjac.py
+
+This module provides utilities for computing numerical Jacobians for multidimensional arrays.
+It includes functions for generating sparsity patterns, grouping columns by non-overlapping rows,
+and precomputing perturbations for efficient Jacobian computation.
+
+Key Features:
+- Expand dependencies into a uniform list of tuples in PyMRM dependency notation.
+- Generate sparsity patterns for stencil-based numerical Jacobians.
+- Group columns of sparse matrices by non-overlapping rows for efficient computation.
+- Precompute perturbed values and compute differences in function values for Jacobian estimation.
+- A `NumJac` class for encapsulating numerical Jacobian computation with customizable stencils.
+
+Dependencies:
+- NumPy
+- SciPy
+- Numba
+
+"""
 import numpy as np
 from scipy.sparse import csc_array, sparray
 from scipy.sparse.csgraph import reverse_cuthill_mckee
