@@ -12,19 +12,39 @@ from scipy.optimize import OptimizeResult
 
 def newton(function, initial_guess, args=(), tol=1.49012e-08, maxfev=100, solver=None, callback=None):
     """
-    Perform Newton-Raphson iterations to solve nonlinear systems.
+    Perform Newton-Raphson iterations to solve nonlinear systems of equations.
+
+    This method iteratively refines an initial guess to find the root of a system
+    of nonlinear equations. It supports various linear solvers for handling the
+    Jacobian matrix.
 
     Args:
-        function (callable): Function returning the residual and Jacobian.
-        initial_guess (ndarray): Initial guess for the solution.
-        args (tuple, optional): Additional arguments for the function.
-        tol (float, optional): Convergence criterion. Default is 1.49012e-08.
-        maxfev (int, optional): Maximum iterations allowed. Default is 100.
-        solver (str, optional): Linear solver to use ('spsolve', 'cg', 'bicgstab').
-        callback (callable, optional): Function called after each iteration.
+        function (callable): A function that takes the current solution estimate
+            and additional arguments, and returns a tuple containing the residual
+            vector and the Jacobian matrix.
+        initial_guess (ndarray): Initial guess for the solution vector.
+        args (tuple, optional): Additional arguments to pass to the `function`.
+            Default is an empty tuple.
+        tol (float, optional): Convergence tolerance for the solution. Iterations
+            stop when the infinity norm of the update vector is less than `tol`.
+            Default is 1.49012e-08.
+        maxfev (int, optional): Maximum number of iterations allowed. Default is 100.
+        solver (str, optional): Linear solver to use for solving the Jacobian system.
+            Options are 'spsolve', 'cg', or 'bicgstab'. If not specified, 'spsolve'
+            is used for small systems (n < 50000), and 'bicgstab' for larger systems.
+        callback (callable, optional): A function called after each iteration with
+            the current solution estimate and residual vector as arguments.
 
     Returns:
-        OptimizeResult: Contains the solution, success status, and diagnostic info.
+        OptimizeResult: An object containing the following fields:
+            - x (ndarray): The solution vector.
+            - success (bool): Whether the solver converged.
+            - nit (int): Number of iterations performed.
+            - fun (ndarray): The residual vector at the solution.
+            - message (str): A message describing the termination status.
+
+    Raises:
+        ValueError: If an unsupported solver method is specified.
     """
     n = initial_guess.size
     if solver is None:
@@ -63,14 +83,27 @@ def newton(function, initial_guess, args=(), tol=1.49012e-08, maxfev=100, solver
 
 def clip_approach(values, function, lower_bounds=0, upper_bounds=None, factor=0):
     """
-    Filter values with lower and upper bounds using an approach factor.
+    Apply bounds and an approach factor to an array of values.
+
+    This function modifies the input array `values` in-place by applying lower
+    and upper bounds. If an approach factor is specified, values outside the
+    bounds are adjusted proportionally to the factor.
 
     Args:
-        values (ndarray): The array of values to be filtered.
-        function (callable): The function to apply.
-        lower_bounds (float or ndarray, optional): The lower bounds. Default is 0.
-        upper_bounds (float or ndarray, optional): The upper bounds. Default is None.
-        factor (float, optional): The approach factor. Default is 0.
+        values (ndarray): The array of values to be modified.
+        function (callable): A function to apply to the values (not used in the
+            current implementation but reserved for future extensions).
+        lower_bounds (float or ndarray, optional): The lower bounds for the values.
+            Can be a scalar or an array of the same shape as `values`. Default is 0.
+        upper_bounds (float or ndarray, optional): The upper bounds for the values.
+            Can be a scalar or an array of the same shape as `values`. Default is None.
+        factor (float, optional): The approach factor. If 0, values are clipped
+            directly to the bounds. If non-zero, values outside the bounds are
+            adjusted proportionally. Default is 0.
+
+    Notes:
+        - The function modifies the `values` array in-place.
+        - If `lower_bounds` or `upper_bounds` are not specified, they are ignored.
     """
     if factor == 0:
         np.clip(values, lower_bounds, upper_bounds, out=values)
