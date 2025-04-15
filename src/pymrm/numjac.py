@@ -9,23 +9,14 @@ def expand_dependencies(shape_in, shape_out, dependencies):
     Expand a given set of dependencies into a uniform list of tuples in the 
     PyMRM dependency notation, fully expanded.
 
-    PyMRM Dependency Notation:
-    --------------------------
-    (index_in, index_out, fixed_axes_list, periodic_axes_list)
-
-    - index_in: A tuple representing the position in the input (field) array that contributes
-      to the value at index_out.
-    - index_out: A tuple representing the position in the output (function) array,
-      or None if no reference is needed (e.g., simple stencil).
-    - fixed_axes_list: A list of axis indices that are considered fixed.
-    - periodic_axes_list: A list of axis indices that are considered periodic.
+    Parameters:
+    - shape_in (tuple): Shape of the input array.
+    - shape_out (tuple): Shape of the output array.
+    - dependencies (list or tuple): List of dependencies in PyMRM dependency notation.
 
     Returns:
-    --------
-    A list of tuples in the form (index_in, index_out, fixed_axes_list, periodic_axes_list)
-    with all indices fully expanded into integers.
+    - list: Fully expanded list of dependencies in the form (index_in, index_out, fixed_axes_list, periodic_axes_list).
     """
-
     # Helper functions
     def slice_to_list(slc, dim_size):
         return list(range(*slc.indices(dim_size)))
@@ -66,6 +57,13 @@ def expand_dependencies(shape_in, shape_out, dependencies):
         """
         Expand a single index tuple. The index can contain ints, slices, lists, or ranges.
         Returns a list of fully expanded tuples, or [None] if idx is None.
+
+        Parameters:
+        - idx (tuple): Index tuple to expand.
+        - shape (tuple): Shape of the array.
+
+        Returns:
+        - list: Expanded list of tuples.
         """
         if not isinstance(idx, tuple):
             raise ValueError("Index must be a tuple or None.")
@@ -139,7 +137,16 @@ def expand_dependencies(shape_in, shape_out, dependencies):
 
 @njit
 def ravel_index_numba(shape, index):
-    "Convert a multidimensional index to a flat index."
+    """
+    Convert a multidimensional index to a flat index.
+
+    Parameters:
+    - shape (tuple): Shape of the multidimensional array.
+    - index (tuple): Multidimensional index.
+
+    Returns:
+    - int: Flat (linear) index.
+    """
     lin_idx = 0
     for i in range(len(shape)):
         lin_idx = lin_idx * shape[i] + index[i]
@@ -147,7 +154,16 @@ def ravel_index_numba(shape, index):
 
 @njit
 def unravel_index_numba(lin_idx, shape):
-    "Convert a flat (linear) index to a multidimensional index."
+    """
+    Convert a flat (linear) index to a multidimensional index.
+
+    Parameters:
+    - lin_idx (int): Flat index.
+    - shape (tuple): Shape of the multidimensional array.
+
+    Returns:
+    - np.ndarray: Multidimensional index.
+    """
     idx = np.empty(len(shape), dtype=np.int64)
     for i in range(len(shape) - 1, -1, -1):
         idx[i] = lin_idx % shape[i]
@@ -158,23 +174,19 @@ def unravel_index_numba(lin_idx, shape):
 def iterate_over_entries(shape_in, shape_out, shape_rel, idx_in, idx_out, row_indices, col_indices, entry_idx):
     """
     Iterate over all valid relative entries defined by shape_rel and fill row_indices and col_indices.
-    This function:
-    - Interprets shape_rel as the size of the relative axes.
-    - For each combination of relative indices (idx_rel), computes the absolute positions (idx_out, idx_in) by adding idx_rel to idx_out and idx_in and applying periodicity.
-    - Stores the computed flat indices in row_indices and col_indices.
 
-    Args:
-        shape_in (np.ndarray): The full shape of the multidimensional input (field) array.
-        shape_out (np.ndarray): The full shape of the multidimensional output (function) array.
-        shape_rel (np.ndarray): Shape array representing the size of relative axes.
-        idx_in (np.ndarray): Input position array (adjusted for relative indexing).
-        idx_out (np.ndarray): Output position array (adjusted for relative indexing).
-        row_indices (np.ndarray): Preallocated array for row indices.
-        col_indices (np.ndarray): Preallocated array for column indices.
-        entry_idx (int): Starting index in the row_indices/col_indices arrays to place data.
+    Parameters:
+    - shape_in (np.ndarray): Shape of the input array.
+    - shape_out (np.ndarray): Shape of the output array.
+    - shape_rel (np.ndarray): Shape of the relative axes.
+    - idx_in (np.ndarray): Input position array.
+    - idx_out (np.ndarray): Output position array.
+    - row_indices (np.ndarray): Preallocated array for row indices.
+    - col_indices (np.ndarray): Preallocated array for column indices.
+    - entry_idx (int): Starting index in the row_indices/col_indices arrays.
 
     Returns:
-        int: The updated index after filling in entries.
+    - int: Updated index after filling in entries.
     """
     num_dims = shape_in.size
     size_lin = 1
@@ -204,19 +216,15 @@ def iterate_over_entries(shape_in, shape_out, shape_rel, idx_in, idx_out, row_in
 
 def generate_sparsity_pattern(shape_in, shape_out, dependencies):
     """
-    Generate row and column indices for the sparse matrix representation
-    of a given stencil pattern. This function attempts to minimize loops
-    over large dimensions by focusing on relative axes and using Numba-compiled
-    helper functions for speed.
+    Generate row and column indices for the sparse matrix representation of a stencil pattern.
 
     Parameters:
-    - shape_in: Tuple of ints, the shape of the multidimensional array corresponding to the field.
-    - shape_out: Tuple of ints, the shape of the multidimensional array corresponding to the function.
-    - dependencies: A list of tuples (idx_out, idx_in, fixed_axes, periodic_axes) representing the stencil pattern. Each dependency indicates how output positions relate to input positions and which axes are fixed or periodic.
+    - shape_in (tuple): Shape of the input array.
+    - shape_out (tuple): Shape of the output array.
+    - dependencies (list): List of dependencies in PyMRM dependency notation.
 
     Returns:
-    - row_indices: 1D numpy array of row indices for the sparse pattern.
-    - col_indices: 1D numpy array of column indices for the sparse pattern.
+    - tuple: (row_indices, col_indices) for the sparse pattern.
     """
     shape_in = np.array(shape_in, dtype=np.int64)
     shape_out = np.array(shape_out, dtype=np.int64)
@@ -272,6 +280,16 @@ def generate_sparsity_pattern(shape_in, shape_out, dependencies):
 
 @njit
 def group_columns_by_non_overlap_numba(indptr, indices):
+    """
+    Group columns of a sparse matrix by non-overlapping rows.
+
+    Parameters:
+    - indptr (np.ndarray): Index pointer array of the sparse matrix.
+    - indices (np.ndarray): Column indices of the sparse matrix.
+
+    Returns:
+    - tuple: (group array, number of groups).
+    """
     n = indptr.size - 1
     g = np.full(n, n, dtype=np.int64)
     groupnum = 0
@@ -291,6 +309,17 @@ def group_columns_by_non_overlap_numba(indptr, indices):
     return g, groupnum
 
 def colgroup(*args, shape=None, try_reorder=True):
+    """
+    Group columns of a sparse matrix by non-overlapping rows.
+
+    Parameters:
+    - args: Sparse matrix or row/column indices.
+    - shape (tuple, optional): Shape of the sparse matrix.
+    - try_reorder (bool, optional): Whether to attempt reordering for fewer groups.
+
+    Returns:
+    - tuple: (group array, number of groups).
+    """
     if isinstance(args[0], sparray):
         S = csc_array(args[0])
         T = csc_array((S.data != 0, S.indices, S.indptr), shape=S.shape)
@@ -323,6 +352,18 @@ def colgroup(*args, shape=None, try_reorder=True):
     return g, num_groups
 
 def stencil_block_diagonals(ndims=1, axes_diagonals=[], axes_blocks=[-1], periodic_axes=[]):
+    """
+    Generate a stencil pattern for block diagonals.
+
+    Parameters:
+    - ndims (int): Number of dimensions.
+    - axes_diagonals (list): Axes for diagonal dependencies.
+    - axes_blocks (list): Axes for block dependencies.
+    - periodic_axes (list): Axes with periodic boundaries.
+
+    Returns:
+    - list: Stencil pattern in PyMRM dependency notation.
+    """
     if (ndims < len(axes_diagonals) or ndims < len(axes_blocks)):
         raise ValueError("Number of dimensions should be greater than the number of axes.")
     dependencies = []
@@ -341,12 +382,36 @@ def stencil_block_diagonals(ndims=1, axes_diagonals=[], axes_blocks=[-1], period
     return dependencies
 
 def precompute_perturbations(c, dc, num_gr, gr):
+    """
+    Precompute perturbed values of the input array for numerical Jacobian computation.
+
+    Parameters:
+    - c (np.ndarray): Input array.
+    - dc (np.ndarray): Perturbation array.
+    - num_gr (int): Number of groups.
+    - gr (np.ndarray): Group array.
+
+    Returns:
+    - np.ndarray: Perturbed values of the input array.
+    """
     c_perturb = np.tile(c[np.newaxis, ...], (num_gr,) + (1,) * c.ndim)
     c_perturb.ravel()[c.size * gr.ravel() + np.arange(c.size)] += dc.ravel()
     return c_perturb
 
 @njit(parallel=True)
 def precompute_perturbations_numba(c, dc, num_gr, gr):
+    """
+    Precompute perturbed values of the input array using Numba for numerical Jacobian computation.
+
+    Parameters:
+    - c (np.ndarray): Input array.
+    - dc (np.ndarray): Perturbation array.
+    - num_gr (int): Number of groups.
+    - gr (np.ndarray): Group array.
+
+    Returns:
+    - np.ndarray: Perturbed values of the input array.
+    """
     c_flat = c.ravel()
     dc_flat = dc.ravel()
     gr_flat = gr.ravel()
@@ -366,42 +431,66 @@ def precompute_perturbations_numba(c, dc, num_gr, gr):
 
 @njit(parallel=True)
 def compute_df(f_value, perturbed_values, num_gr):
+    """
+    Compute the difference in function values for perturbed inputs.
+
+    Parameters:
+    - f_value (np.ndarray): Original function value.
+    - perturbed_values (np.ndarray): Function values for perturbed inputs.
+    - num_gr (int): Number of groups.
+
+    Returns:
+    - np.ndarray: Differences in function values.
+    """
     df = np.empty(perturbed_values.shape)
     for k in prange(num_gr):
         df[k, ...] = (perturbed_values[k, ...] - f_value)
     return df
 
-#@njit(parallel=True)
 def compute_df2(f, f_value, c_values, num_gr):
+    """
+    Compute the difference in function values for perturbed inputs by evaluating the function.
+
+    Parameters:
+    - f (callable): Function to evaluate.
+    - f_value (np.ndarray): Original function value.
+    - c_values (np.ndarray): Perturbed input values.
+    - num_gr (int): Number of groups.
+
+    Returns:
+    - np.ndarray: Differences in function values.
+    """
     df = np.empty((num_gr,*f_value.shape))
     for k in prange(num_gr):
         df[k, ...] = (f(c_values[k, ...]) - f_value)
     return df
 
 class NumJac:
-    def __init__(
-        self,
-        shape=None,
-        shape_in=None,
-        shape_out=None,
-        stencil=stencil_block_diagonals,
-        eps_jac=1e-6,
-        **kwargs,
-    ):
+    """
+    Class for computing numerical Jacobians for multidimensional arrays.
+
+    Attributes:
+    - shape_in (tuple): Shape of the input array.
+    - shape_out (tuple): Shape of the output array.
+    - eps_jac (float): Perturbation size for numerical Jacobian.
+    - dependencies (list): Stencil pattern in PyMRM dependency notation.
+    - rows (np.ndarray): Row indices for the sparse Jacobian.
+    - cols (np.ndarray): Column indices for the sparse Jacobian.
+    - gr (np.ndarray): Group array for column grouping.
+    - num_gr (int): Number of groups.
+    """
+
+    def __init__(self, shape=None, shape_in=None, shape_out=None, stencil=stencil_block_diagonals, eps_jac=1e-6, **kwargs):
         """
         Initialize the NumJac class.
 
-        Args:
-            shape (tuple, optional): Shape of the multidimensional array (used when shape_in == shape_out).
-            shape_in (tuple, optional): Shape of the input array (used when shape != shape_out).
-            shape_out (tuple, optional): Shape of the output array (used when shape != shape_out).
-            stencil (callable, optional): Function to generate the stencil. Default is None.
-            eps_jac (float, optional): Perturbation size for numerical Jacobian. Default is 1e-6.
-            *args: Additional positional arguments passed to the stencil function.
-            **kwargs: Additional keyword arguments passed to the stencil function.
-
-        Raises:
-            ValueError: If both `shape` and `shape_in`/`shape_out` are specified or if inputs are inconsistent.
+        Parameters:
+        - shape (tuple, optional): Shape of the multidimensional array (used when shape_in == shape_out).
+        - shape_in (tuple, optional): Shape of the input array (used when shape != shape_out).
+        - shape_out (tuple, optional): Shape of the output array (used when shape != shape_out).
+        - stencil (callable, optional): Function to generate the stencil. Default is stencil_block_diagonals.
+        - eps_jac (float, optional): Perturbation size for numerical Jacobian. Default is 1e-6.
+        - **kwargs: Additional keyword arguments passed to the stencil function.
         """
         if shape is not None and (shape_in is not None or shape_out is not None):
             raise ValueError(
@@ -430,10 +519,9 @@ class NumJac:
         """
         Initialize the stencil pattern.
 
-        Args:
-            stencil (callable): Function to generate the stencil.
-            *args: Additional positional arguments passed to the stencil function.
-            **kwargs: Additional keyword arguments passed to the stencil function.
+        Parameters:
+        - stencil (callable): Function to generate the stencil.
+        - **kwargs: Additional keyword arguments passed to the stencil function.
         """
         if stencil is None:
             raise ValueError("A stencil function or stencil specification must be provided.")
@@ -446,6 +534,16 @@ class NumJac:
         self.gr, self.num_gr = colgroup(self.rows, self.cols, shape = (np.prod(self.shape_out), np.prod(self.shape_in)))
         
     def __call__(self, f, c):
+        """
+        Compute the numerical Jacobian for a given function and input array.
+
+        Parameters:
+        - f (callable): Function to evaluate.
+        - c (np.ndarray): Input array.
+
+        Returns:
+        - tuple: (Function value, Jacobian as a sparse matrix).
+        """
         f_value = f(c)
         dc = -self.eps_jac * np.abs(c)
         dc[dc > (-self.eps_jac)] = self.eps_jac
