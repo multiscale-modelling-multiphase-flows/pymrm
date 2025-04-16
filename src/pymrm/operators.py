@@ -44,6 +44,8 @@ def construct_grad(shape, x_f, x_c=None, bc=(None, None), axis=0, shapes_d=(None
     """
     if isinstance(shape, int):
         shape = (shape, )
+    else:
+        shape = tuple(shape)
     x_f, x_c = generate_grid(shape[axis], x_f, generate_x_c=True, x_c=x_c)
     grad_matrix = construct_grad_int(shape, x_f, x_c, axis)
 

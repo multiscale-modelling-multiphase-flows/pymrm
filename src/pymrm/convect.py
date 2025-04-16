@@ -50,7 +50,9 @@ def construct_convflux_upwind(shape, x_f, x_c=None, bc=(None, None), v=1.0, axis
         csc_array: Convective flux matrix for boundary conditions.
     """
     if isinstance(shape, int):
-        shape = (shape,)
+        shape = (shape, )
+    else:
+        shape = tuple(shape)
     x_f, x_c = generate_grid(shape[axis], x_f, generate_x_c=True, x_c=x_c)
 
     v_f = create_staggered_array(v, shape, axis, x_f=x_f, x_c=x_c)
@@ -172,7 +174,7 @@ def construct_convflux_bc(shape, x_f, x_c=None, bc=(None, None), v=1.0, axis=0, 
         else:
             slicer = [slice(None)]*len(shape)
             slicer[axis] = [0, -1]
-            shape_f_b = shape_f
+            shape_f_b = list(shape_f)
             shape_f_b[axis] = 2
             values = values.reshape(shape_f_b)
             values *= v[tuple(slicer)]
@@ -237,7 +239,7 @@ def construct_convflux_bc(shape, x_f, x_c=None, bc=(None, None), v=1.0, axis=0, 
         else:
             slicer = [slice(None)]*len(shape)
             slicer[axis] = [0, 0, -1, -1]
-            shape_f_b = shape_f
+            shape_f_b = list(shape_f)
             shape_f_b[axis] = 4
             values = values.reshape(shape_f_b)
             values *= v[tuple(slicer)]
