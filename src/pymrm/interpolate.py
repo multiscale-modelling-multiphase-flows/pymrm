@@ -21,6 +21,9 @@ Functions:
 - create_staggered_array(array, shape, axis, x_f=None, x_c=None)
     Generate staggered arrays for face-centered values.
 
+- compute_boundary_values(cell_centered_values, x_f, x_c=None, bc=None, axis=0)
+    Compute boundary values and gradients for cell-centered values.
+
 Dependencies:
 -------------
 - numpy: For array manipulations.
@@ -33,16 +36,16 @@ from .helpers import unwrap_bc_coeff
 
 def interp_stagg_to_cntr(staggered_values, x_f, x_c=None, axis=0):
     """
-    Interpolate values at staggered positions to cell-centers using linear interpolation.
+    Linearly interpolate values from staggered positions to cell-centered positions.
 
     Args:
-        staggered_values (ndarray): Quantities at staggered positions.
-        x_f (ndarray): Positions of cell-faces.
-        x_c (ndarray, optional): Cell-centered positions. If None, they are computed as midpoints.
-        axis (int, optional): Dimension to interpolate along. Default is 0.
+        staggered_values (ndarray): Array of values at staggered positions.
+        x_f (ndarray): Positions of cell faces.
+        x_c (ndarray, optional): Positions of cell centers. If None, midpoints are used.
+        axis (int, optional): Axis along which to interpolate. Default is 0.
 
     Returns:
-        ndarray: Interpolated values at cell centers.
+        ndarray: Interpolated values at cell-centered positions.
     """
     shape_f = list(staggered_values.shape)
     if axis < 0:
@@ -64,13 +67,13 @@ def interp_stagg_to_cntr(staggered_values, x_f, x_c=None, axis=0):
 
 def interp_cntr_to_stagg(cell_centered_values, x_f, x_c=None, axis=0):
     """
-    Interpolate values at cell-centers to staggered positions using linear interpolation.
+    Linearly interpolate values from cell-centered positions to staggered positions.
 
     Args:
-        cell_centered_values (ndarray): Quantities at cell-centered positions.
-        x_f (ndarray): Positions of cell-faces.
-        x_c (ndarray, optional): Cell-centered positions. If None, they are computed as midpoints.
-        axis (int, optional): Dimension to interpolate along. Default is 0.
+        cell_centered_values (ndarray): Array of values at cell-centered positions.
+        x_f (ndarray): Positions of cell faces.
+        x_c (ndarray, optional): Positions of cell centers. If None, midpoints are used.
+        axis (int, optional): Axis along which to interpolate. Default is 0.
 
     Returns:
         ndarray: Interpolated values at staggered positions.
@@ -100,60 +103,24 @@ def interp_cntr_to_stagg(cell_centered_values, x_f, x_c=None, axis=0):
                                       cell_centered_values[:, -2, :]*(x_f[-1]-x_c[-1]))/(x_c[-1]-x_c[-2])
     return staggered_values.reshape(shape_f)
 
-def interp_cntr_to_stagg(cell_centered_values, x_f, x_c=None, axis=0):
-    """
-    Interpolate values at cell-centers to staggered positions using linear interpolation.
-
-    Args:
-        cell_centered_values (ndarray): Quantities at cell-centered positions.
-        x_f (ndarray): Positions of cell-faces.
-        x_c (ndarray, optional): Cell-centered positions. If None, they are computed as midpoints.
-        axis (int, optional): Dimension to interpolate along. Default is 0.
-
-    Returns:
-        ndarray: Interpolated values at staggered positions.
-    """
-    shape = list(cell_centered_values.shape)
-    if axis < 0:
-        axis += len(shape)
-    shape_t = [math.prod(shape[:axis]), math.prod(shape[axis:axis+1]), math.prod(shape[axis + 1:])]
-    shape_f = shape.copy()
-    shape_f[axis] += 1
-    shape_f_t = shape_t.copy()
-    shape_f_t[1] += 1
-    if x_c is None:
-        x_c = 0.5 * (x_f[:-1] + x_f[1:])
-
-    wght = (x_f[1:-1] - x_c[:-1]) / (x_c[1:] - x_c[:-1])
-    cell_centered_values = cell_centered_values.reshape(shape_t)
-    if shape_t[1] == 1:
-        staggered_values = np.tile(cell_centered_values, (1, 2, 1))
-    else:
-        staggered_values = np.empty(shape_f_t)
-        staggered_values[:, 1:-1, :] = cell_centered_values[:, :-1, :] + wght.reshape(
-            (1, -1, 1)) * (cell_centered_values[:, 1:, :] - cell_centered_values[:, :-1, :])
-        staggered_values[:, 0, :] = (cell_centered_values[:, 0, :]*(x_c[1]-x_f[0]) -
-                                     cell_centered_values[:, 1, :]*(x_c[0]-x_f[0]))/(x_c[1]-x_c[0])
-        staggered_values[:, -1, :] = (cell_centered_values[:, -1, :]*(x_f[-1]-x_c[-2]) -
-                                      cell_centered_values[:, -2, :]*(x_f[-1]-x_c[-1]))/(x_c[-1]-x_c[-2])
-    return staggered_values.reshape(shape_f)
 
 def interp_cntr_to_stagg_tvd(cell_centered_values, x_f, x_c=None, bc=None, v=0, tvd_limiter=None, axis=0):
     """
-    Interpolate values at cell-centers to staggered positions using a TVD scheme.
+    Perform TVD interpolation from cell-centered positions to staggered positions.
 
     Args:
-        cell_centered_values (ndarray): Quantities at cell-centered positions.
-        x_f (ndarray): Positions of cell-faces.
-        x_c (ndarray, optional): Cell-centered positions. If None, they are computed as midpoints.
-        bc (tuple, optional): Boundary conditions. Default is None.
+        cell_centered_values (ndarray): Array of values at cell-centered positions.
+        x_f (ndarray): Positions of cell faces.
+        x_c (ndarray, optional): Positions of cell centers. If None, midpoints are used.
+        bc (tuple, optional): Boundary conditions as dictionaries with keys 'a', 'b', and 'd'.
         v (ndarray or float, optional): Velocity field for upwinding. Default is 0.
         tvd_limiter (callable, optional): TVD limiter function. Default is None.
-        axis (int, optional): Dimension to interpolate along. Default is 0.
+        axis (int, optional): Axis along which to interpolate. Default is 0.
 
     Returns:
-        ndarray: Interpolated concentrations at staggered positions.
-        ndarray: Delta staggered values.
+        tuple:
+            - ndarray: Interpolated values at staggered positions.
+            - ndarray: Delta values for TVD corrections.
     """
     shape = list(cell_centered_values.shape)
     if axis < 0:
@@ -284,19 +251,20 @@ def interp_cntr_to_stagg_tvd(cell_centered_values, x_f, x_c=None, bc=None, v=0, 
             staggered_values = staggered_values.reshape(shape_f)
     return staggered_values, delta_staggered_values
 
+
 def create_staggered_array(array, shape, axis, x_f=None, x_c=None):
     """
-    Create a staggered array by broadcasting or interpolating face-centered values.
+    Generate a staggered array by broadcasting or interpolating face-centered values.
 
     Args:
-        array (ndarray): The array to be staggered.
+        array (ndarray): Input array to be staggered.
         shape (tuple): Shape of the non-staggered cell-centered field.
         axis (int): Axis along which staggering is applied.
-        x_f (ndarray, optional): Face positions. Default is None.
-        x_c (ndarray, optional): Cell positions. Default is None.
+        x_f (ndarray, optional): Positions of cell faces. Default is None.
+        x_c (ndarray, optional): Positions of cell centers. Default is None.
 
     Returns:
-        ndarray: The staggered array aligned with face positions.
+        ndarray: Staggered array aligned with face positions.
     """
     if not isinstance(shape, (list, tuple)):
         shape_f = [shape]
@@ -334,19 +302,24 @@ def create_staggered_array(array, shape, axis, x_f=None, x_c=None):
     array_f = np.broadcast_to(array_f, shape_f)
     return array_f
 
+
 def compute_boundary_values(cell_centered_values, x_f, x_c=None, bc=None, axis=0):
     """
-    Interpolate values at cell-centers to staggered positions using a TVD scheme.
+    Compute boundary values and gradients for cell-centered values.
 
     Args:
-        cell_centered_values (ndarray): Quantities at cell-centered positions.
-        x_f (ndarray): Positions of cell-faces.
-        x_c (ndarray, optional): Cell-centered positions. If None, they are computed as midpoints.
-        bc (tuple, optional): Boundary conditions. Default is None.
-        axis (int, optional): Dimension to interpolate along. Default is 0.
+        cell_centered_values (ndarray): Array of values at cell-centered positions.
+        x_f (ndarray): Positions of cell faces.
+        x_c (ndarray, optional): Positions of cell centers. If None, midpoints are used.
+        bc (tuple, optional): Boundary conditions as dictionaries with keys 'a', 'b', and 'd'.
+        axis (int, optional): Axis along which to compute boundary values. Default is 0.
 
     Returns:
-        ndarray: concentrations at staggered positions.
+        tuple:
+            - ndarray: Boundary values at the lower boundary.
+            - ndarray: Gradients at the lower boundary.
+            - ndarray: Boundary values at the upper boundary.
+            - ndarray: Gradients at the upper boundary.
     """
     shape = list(cell_centered_values.shape)
     if axis < 0:

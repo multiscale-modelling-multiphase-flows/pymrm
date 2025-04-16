@@ -57,7 +57,7 @@ from .interpolate import interp_stagg_to_cntr, interp_cntr_to_stagg, interp_cntr
 from .solve import newton, clip_approach
 from .numjac import NumJac, stencil_block_diagonals
 from .coupling import update_csc_array_indices, translate_indices_to_larger_array, construct_interface_matrices
-from .helpers import unwrap_bc_coeff, construct_coefficient_matrix
+from .helpers import construct_coefficient_matrix
 
 __all__ = [
     "generate_grid", "non_uniform_grid",
