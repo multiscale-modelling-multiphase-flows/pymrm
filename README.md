@@ -23,6 +23,8 @@ For detailed instructions, see the [Installation Guide](https://github.com/multi
 
 Start with the tutorials in the [`tutorials`](https://github.com/multiscale-modelling-multiphase-flows/pymrm/tree/main/tutorials) folder to learn the basics of pymrm. Then, explore the [`examples`](https://github.com/multiscale-modelling-multiphase-flows/pymrm/tree/main/examples) folder for more advanced use cases, including modeling diffusion, convection, and reaction processes.
 
+For extensive documentation, exercises, and additional resources, visit the [PyMRM documentation site](https://multiscale-modelling-multiphase-flows.github.io/pymrm-book).
+
 ## Contributing
 
 Contributions are welcome! For suggestions or enhancements, please contact us or submit a pull request.
