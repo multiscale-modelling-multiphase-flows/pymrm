@@ -48,11 +48,8 @@ def construct_grad(shape, x_f, x_c=None, bc=(None, None), axis=0, shapes_d=(None
     grad_matrix = construct_grad_int(shape, x_f, x_c, axis)
 
     if bc == (None, None):
-        shape_f = shape.copy()
-        if axis < 0:
-            axis += len(shape)
-        shape_f[axis] += 1
-        grad_bc = csc_array(shape=(math.prod(shape_f), 1))
+        shape_f = shape[:axis] + (shape[axis] + 1,) + shape[axis + 1:]
+        grad_bc = csc_array((math.prod(shape_f),1))
         return grad_matrix, grad_bc
     else:
         if shapes_d is None or shapes_d == (None, None):
@@ -118,17 +115,11 @@ def construct_grad_bc(shape, x_f, x_c=None, bc=(None, None), axis=0, shapes_d=(N
         csc_array or tuple: Gradient matrix for boundary faces and contributions from inhomogeneous boundary conditions.
                             If `shapes_d` is provided, returns a tuple of matrices.
     """
-    if axis < 0:
-        axis += len(shape)
-    shape_f = list(shape)
-    shape_t = [math.prod(shape_f[0:axis]), math.prod(
-        shape_f[axis:axis+1]), math.prod(shape_f[axis+1:])]
-    shape_f[axis] = shape_f[axis] + 1
-    shape_f_t = shape_t.copy()
-    shape_f_t[1] = shape_t[1] + 1
-    shape_bc = shape_f.copy()
-    shape_bc[axis] = 1
-    shape_bc_d = [shape_t[0], shape_t[2]]
+    shape_f = shape[:axis] + (shape[axis] + 1,) + shape[axis + 1:]
+    shape_t = (math.prod(shape[:axis]), shape[axis], math.prod(shape[axis + 1:]))
+    shape_f_t = (shape_t[0], shape_f[axis], shape_t[2])
+    shape_bc = shape[:axis] + (1,) + shape[axis + 1:]
+    shape_bc_d = (shape_t[0], shape_t[2])
     
     # Handle special case with one cell in the dimension axis.
     # This is convenient e.g. for flexibility where you can choose not to
@@ -269,19 +260,14 @@ def construct_div(shape, x_f, nu=0, axis=0):
         csc_array: Divergence matrix.
     """
     if isinstance(shape, int):
-        shape_f = [shape]
         shape = (shape, )
     else:
-        shape_f = list(shape)
         shape = tuple(shape)
     x_f = generate_grid(shape[axis], x_f)
-    if axis < 0:
-        axis += len(shape)
-    shape_t = [math.prod(shape_f[0:axis]), math.prod(
-        shape_f[axis:axis + 1]), math.prod(shape_f[axis + 1:])]
-    shape_f[axis] += 1
-    shape_f_t = shape_t.copy()
-    shape_f_t[1] += 1
+
+    shape_f = shape[:axis] + (shape[axis] + 1,) + shape[axis + 1:]
+    shape_t = (math.prod(shape[:axis]), shape[axis], math.prod(shape[axis + 1:]))
+    shape_f_t = (shape_t[0], shape_f[axis], shape_t[2])
 
     i_f = (
         shape_f_t[1] * shape_f_t[2] *

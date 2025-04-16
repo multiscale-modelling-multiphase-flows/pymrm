@@ -56,8 +56,7 @@ def construct_convflux_upwind(shape, x_f, x_c=None, bc=(None, None), v=1.0, axis
     v_f = create_staggered_array(v, shape, axis, x_f=x_f, x_c=x_c)
     conv_matrix = construct_convflux_upwind_int(shape, v_f, axis)
     if (bc is None or bc == (None, None)):
-        shape_f = shape.copy()
-        shape_f[axis] += 1
+        shape_f = shape[:axis] + (shape[axis] + 1,) + shape[axis + 1:]
         conv_bc = csc_array((math.prod(shape_f), 1))
         return conv_matrix, conv_bc
     else: 
@@ -84,18 +83,10 @@ def construct_convflux_upwind_int(shape, v=1.0, axis=0):
     Returns:
         csc_array: Convective flux matrix for internal faces.
     """
-    if not isinstance(shape, (list, tuple)):
-        shape_f = [shape]
-    else:
-        shape_f = list(shape)
-    if axis < 0:
-        axis += len(shape)
-    shape_t = [math.prod(shape_f[0:axis]), math.prod(
-        shape_f[axis:axis+1]), math.prod(shape_f[axis+1:])]
+    shape_f = shape[:axis] + (shape[axis] + 1,) + shape[axis + 1:]
+    shape_t = (math.prod(shape[:axis]), shape[axis], math.prod(shape[axis + 1:]))
+    shape_f_t = (shape_t[0], shape_f[axis], shape_t[2])
 
-    shape_f[axis] = shape_f[axis] + 1
-    shape_f_t = shape_t.copy()
-    shape_f_t[1] = shape_t[1] + 1
 
     if (isinstance(v, (float, int))):
         v_t = np.broadcast_to(np.array(v), shape_f_t)
@@ -134,24 +125,11 @@ def construct_convflux_bc(shape, x_f, x_c=None, bc=(None, None), v=1.0, axis=0, 
     """
 
     # Trick: Reshape to triplet shape_t
-    if not isinstance(shape, (list, tuple)):
-        shape_f = [shape]
-    else:
-        shape_f = list(shape)
-    if axis < 0:
-        axis += len(shape)
-    shape_t = [math.prod(shape_f[0:axis]), math.prod(
-        shape_f[axis:axis+1]), math.prod(shape_f[axis+1:])]
-
-    # Create face arrays
-    shape_f[axis] = shape_f[axis] + 1
-    shape_f_t = shape_t.copy()
-    shape_f_t[1] = shape_t[1] + 1
-
-    # Create boundary quantity shapes
-    shape_bc = shape_f.copy()
-    shape_bc[axis] = 1
-    shape_bc_d = [shape_t[0], shape_t[2]]
+    shape_f = shape[:axis] + (shape[axis] + 1,) + shape[axis + 1:]
+    shape_t = (math.prod(shape[:axis]), shape[axis], math.prod(shape[axis + 1:]))
+    shape_f_t = (shape_t[0], shape_f[axis], shape_t[2])
+    shape_bc = shape[:axis] + (1,) + shape[axis + 1:]
+    shape_bc_d = (shape_t[0], shape_t[2])
 
     # Handle special case with one cell in the dimension axis
     if shape_t[1] == 1:
