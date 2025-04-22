@@ -58,6 +58,7 @@ from .solve import newton, clip_approach
 from .numjac import NumJac, stencil_block_diagonals
 from .coupling import update_csc_array_indices, translate_indices_to_larger_array, construct_interface_matrices
 from .helpers import construct_coefficient_matrix
+from ._version import __version__
 
 __all__ = [
     "generate_grid", "non_uniform_grid",
