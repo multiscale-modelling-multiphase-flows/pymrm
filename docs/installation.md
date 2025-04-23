@@ -57,6 +57,12 @@ It is recommended to use a virtual environment to isolate your project dependenc
      source .venv/bin/activate
      ```
 
+3. **Trouble shooting Windows Powershell**
+   When using Windows Powershell it sometimes refuses to execute scripts, and it refuses to run the `activate` script. In that case run Powershell as an administrator and execute the command:
+   ```sh
+   Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+   ```
+
 ## Installing PyMRM
 
 PyMRM is available on PyPI and includes all necessary dependencies.
