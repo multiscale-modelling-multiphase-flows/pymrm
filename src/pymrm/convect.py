@@ -256,6 +256,8 @@ def construct_convflux_bc(shape, x_f, x_c=None, bc=(None, None), v=1.0, axis=0, 
         conv_matrix.sort_indices()
         return conv_matrix, conv_bc
     else:
+        values = values.reshape((shape_t[0], 4, shape_t[2]))  
+        values_bc = values_bc.reshape((shape_t[0], 2, shape_t[2]))  
         conv_bc = [None]*2
         shapes_d = list(shapes_d)
         for i in range(2):

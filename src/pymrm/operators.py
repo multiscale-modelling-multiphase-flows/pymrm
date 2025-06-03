@@ -215,8 +215,6 @@ def construct_grad_bc(shape, x_f, x_c=None, bc=(None, None), axis=0, shapes_d=(N
         values[:, -2, :] = b_fctr * alpha_2
         values[:, -1, :] = -b_fctr * alpha_1
         values_bc[:, -1, :] = d_fctr
-        grad_bc = csc_array((values_bc.ravel(), i_f_bc.ravel(), [
-                        0, i_f_bc.size]), shape=(math.prod(shape_f_t), 1))
     if (shapes_d[0] is None) and (shapes_d[1] is None):
         grad_bc = csc_array((values_bc.ravel(), i_f_bc.ravel(), [
                 0, i_f_bc.size]), shape=(math.prod(shape_f_t), 1))
