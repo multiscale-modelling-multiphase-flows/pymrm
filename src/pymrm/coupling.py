@@ -218,7 +218,7 @@ def construct_interface_matrices(shapes, x_fs, x_cs=(None, None),
         v[i][2] = a[i][1]*alpha_1[1]
         v[i][3] = -a[i][1]*alpha_2[1]
     det = m[0][0]*m[1][1] - m[0][1]*m[1][0]
-    det_inv = np.where(det != 0, 1.0/det, 0.0)
+    det_inv = np.where(det != 0.0, 1.0/det, 0.0)
     m_inv[0][0] = m[1][1]*det_inv
     m_inv[0][1] = -m[0][1]*det_inv
     m_inv[1][0] = -m[1][0]*det_inv

@@ -10,7 +10,7 @@ from scipy.sparse import linalg
 from scipy.linalg import norm
 from scipy.optimize import OptimizeResult
 
-def newton(function, initial_guess, args=(), tol=1.49012e-08, maxfev=100, solver=None, callback=None):
+def newton(function, initial_guess, args=(), tol=1.49012e-08, maxfev=100, solver=None, lin_solver_kwargs=None, callback=None):
     """
     Perform Newton-Raphson iterations to solve nonlinear systems of equations.
 
@@ -29,9 +29,11 @@ def newton(function, initial_guess, args=(), tol=1.49012e-08, maxfev=100, solver
             stop when the infinity norm of the update vector is less than `tol`.
             Default is 1.49012e-08.
         maxfev (int, optional): Maximum number of iterations allowed. Default is 100.
-        solver (str, optional): Linear solver to use for solving the Jacobian system.
-            Options are 'spsolve', 'cg', or 'bicgstab'. If not specified, 'spsolve'
-            is used for small systems (n < 50000), and 'bicgstab' for larger systems.
+        solver (str or callable, optional): Linear solver to use for solving the Jacobian system.
+            Options are 'spsolve', 'cg', or 'bicgstab', or a custom callable. If not specified,
+            'spsolve' is used for small systems (n < 50000), and 'bicgstab' for larger systems.
+        lin_solver_kwargs (dict, optional): Dictionary of keyword arguments to pass to the linear solver.
+            For example, {'tol': 1e-5, 'maxiter': 1000} for iterative solvers.
         callback (callable, optional): A function called after each iteration with
             the current solution estimate and residual vector as arguments.
 
@@ -50,36 +52,47 @@ def newton(function, initial_guess, args=(), tol=1.49012e-08, maxfev=100, solver
     if solver is None:
         solver = 'spsolve' if n < 50000 else 'bicgstab'
 
+    if lin_solver_kwargs is None:
+        lin_solver_kwargs = {}
+
     # Select linear solver
     if solver == 'spsolve':
-        linsolver = linalg.spsolve
+        def linsolver(jac_matrix, g, **kwargs):
+            return linalg.spsolve(jac_matrix, g, **kwargs)
     elif solver == 'cg':
-        def linsolver(jac_matrix, g):
+        def linsolver(jac_matrix, g, **kwargs):
             Jac_iLU = linalg.spilu(jac_matrix)
             M = linalg.LinearOperator((n, n), Jac_iLU.solve)
-            dx_neg, info = linalg.cg(jac_matrix, g, tol=1e-9, maxiter=1000, M=M)
+            dx_neg, info = linalg.cg(jac_matrix, g, M=M, **kwargs)
+            if info != 0:
+                raise RuntimeError(f"CG did not converge, info={info}")
             return dx_neg
     elif solver == 'bicgstab':
-        def linsolver(jac_matrix, g):
+        def linsolver(jac_matrix, g, **kwargs):
             Jac_iLU = linalg.spilu(jac_matrix)
             M = linalg.LinearOperator((n, n), Jac_iLU.solve)
-            dx_neg, info = linalg.bicgstab(jac_matrix, g, tol=1e-9, maxiter=1000, M=M)
+            dx_neg, info = linalg.bicgstab(jac_matrix, g, M=M, **kwargs)
+            if info != 0:
+                raise RuntimeError(f"BICGSTAB did not converge, info={info}")
             return dx_neg
+    elif callable(solver):
+        def linsolver(jac_matrix, g, **kwargs):
+            return solver(jac_matrix, g, **kwargs)
     else:
         raise ValueError("Unsupported solver method.")
 
     x = initial_guess.copy()
     for it in range(int(maxfev)):
         g, jac_matrix = function(x, *args)
-        dx_neg = linsolver(jac_matrix, g)
+        dx_neg = linsolver(jac_matrix, g, **lin_solver_kwargs)
         defect = norm(dx_neg, ord=np.inf)
         x -= dx_neg.reshape(x.shape)
         if callback:
             callback(x, g)
         if defect < tol:
-            return OptimizeResult({'x': x, 'success': True, 'nit': it + 1, 'fun': g, 'message': 'Converged'})
+            return OptimizeResult(x=x, success=True, nit=it + 1, fun=g, message='Converged')
 
-    return OptimizeResult({'x': x, 'success': False, 'nit': maxfev, 'fun': g, 'message': 'Did not converge'})
+    return OptimizeResult(x=x, success=False, nit=maxfev, fun=g, message='Did not converge')
 
 def clip_approach(values, function, lower_bounds=0, upper_bounds=None, factor=0):
     """
