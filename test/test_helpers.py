@@ -1,6 +1,7 @@
 import pytest
 import numpy as np
-from pymrm import unwrap_bc_coeff, construct_coefficient_matrix
+from pymrm.helpers import unwrap_bc_coeff
+from pymrm import construct_coefficient_matrix
 
 def test_unwrap_bc_coeff():
     shape = (5,)
