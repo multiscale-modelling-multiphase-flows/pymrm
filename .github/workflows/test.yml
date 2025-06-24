@@ -30,42 +30,20 @@ jobs:
     - name: run unit tests
       run: scripts/run_unit_tests.sh
 
-    - name: Archive Reports
-      if: always()
+    - name: Upload test results
       uses: actions/upload-artifact@v4
+      with:
+        name: test-results
+        path: test/pytest-results.xml
+
+    - name: Publish test results (only use the JUnit file)
+      uses: EnricoMi/publish-unit-test-result-action@v2
+      with:
+        files: test/pytest-results.xml
+
+    - name: Upload coverage to Codecov
+      if: always()
+      uses: codecov/codecov-action@v4
       with:
         name: coverage
         path: test/coverage.xml
-
-  publish-coverage:
-    # For details checkout https://github.com/marketplace/actions/publish-test-results
-    runs-on: ubuntu-latest
-    container:
-      image: davevader/pymrm_linux:1.0
-# workaround, potentially leave the user as root in dockerfile
-# see here: https://github.com/actions/checkout/issues/956
-      options: --user root
-
-    name: Publish Tests Results
-    needs: [unit_test]
-    permissions:
-      checks: write
-      # only needed unless run with comment_mode: off
-      pull-requests: write
-      # only needed for private repository
-      contents: read
-      # only needed for private repository
-      issues: read
-    if: always()
-
-    steps:
-      - name: Download Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Publish Coverage
-        uses: EnricoMi/publish-unit-test-result-action@v2
-        with:
-          files: |
-            artifacts/coverage/*.xml
