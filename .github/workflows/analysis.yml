@@ -46,6 +46,13 @@ jobs:
     - name: Run Sphinx
       run: scripts/build_documentation.sh
 
+    - name: Upload documentation error log
+      if: always()  # always upload, even if previous step failed
+      uses: actions/upload-artifact@v4
+      with:
+        name: documentation-errors
+        path: docs/sphinx/documentation_errors.txt
+
     - name: Archive Reports
       uses: actions/upload-artifact@v4
       if: always()

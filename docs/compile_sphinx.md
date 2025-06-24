@@ -1,7 +1,7 @@
 ## How to generate documentation with Sphinx
 
 # Quickstart
-The easiest way to generate the documentation is by changing into the `sphinx` directory and the use make for generating the file
+The easiest way to generate the documentation is by changing into the `sphinx` directory and to use `make` for generating the file
 ```bash
 # here we are in the root folder of the package
 cd docs/sphinx
