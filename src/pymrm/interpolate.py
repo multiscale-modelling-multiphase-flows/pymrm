@@ -34,6 +34,7 @@ import math
 import numpy as np
 from .helpers import unwrap_bc_coeff
 
+
 def interp_stagg_to_cntr(staggered_values, x_f, x_c=None, axis=0):
     """
     Linearly interpolate values from staggered positions to cell-centered positions.

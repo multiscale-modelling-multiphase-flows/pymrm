@@ -10,6 +10,7 @@ from scipy.sparse import linalg
 from scipy.linalg import norm
 from scipy.optimize import OptimizeResult
 
+
 def newton(function, initial_guess, args=(), tol=1.49012e-08, maxfev=100, solver=None, lin_solver_kwargs=None, callback=None):
     """
     Perform Newton-Raphson iterations to solve nonlinear systems of equations.
@@ -93,6 +94,7 @@ def newton(function, initial_guess, args=(), tol=1.49012e-08, maxfev=100, solver
             return OptimizeResult(x=x, success=True, nit=it + 1, fun=g, message='Converged')
 
     return OptimizeResult(x=x, success=False, nit=maxfev, fun=g, message='Did not converge')
+
 
 def clip_approach(values, function, lower_bounds=0, upper_bounds=None, factor=0):
     """

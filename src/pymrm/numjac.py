@@ -24,6 +24,7 @@ from scipy.sparse.csgraph import reverse_cuthill_mckee
 from numba import njit, prange
 import numpy as np
 
+
 def expand_dependencies(shape_in, shape_out, dependencies):
     """
     Expand a given set of dependencies into a uniform list of tuples in the 
@@ -155,6 +156,7 @@ def expand_dependencies(shape_in, shape_out, dependencies):
 
     return expanded_deps
 
+
 @njit
 def ravel_index_numba(shape, index):
     """
@@ -171,6 +173,7 @@ def ravel_index_numba(shape, index):
     for i in range(len(shape)):
         lin_idx = lin_idx * shape[i] + index[i]
     return lin_idx
+
 
 @njit
 def unravel_index_numba(lin_idx, shape):
@@ -189,6 +192,7 @@ def unravel_index_numba(lin_idx, shape):
         idx[i] = lin_idx % shape[i]
         lin_idx //= shape[i]
     return idx
+
 
 @njit
 def iterate_over_entries(shape_in, shape_out, shape_rel, idx_in, idx_out, row_indices, col_indices, entry_idx):
@@ -233,6 +237,7 @@ def iterate_over_entries(shape_in, shape_out, shape_rel, idx_in, idx_out, row_in
         current_idx += 1
 
     return current_idx
+
 
 def generate_sparsity_pattern(shape_in, shape_out, dependencies):
     """
@@ -298,6 +303,7 @@ def generate_sparsity_pattern(shape_in, shape_out, dependencies):
     
     return row_indices, col_indices
 
+
 @njit
 def group_columns_by_non_overlap_numba(indptr, indices):
     """
@@ -327,6 +333,7 @@ def group_columns_by_non_overlap_numba(indptr, indices):
         J = np.where(g == n)[0]
         groupnum += 1
     return g, groupnum
+
 
 def colgroup(*args, shape=None, try_reorder=True):
     """
@@ -371,6 +378,7 @@ def colgroup(*args, shape=None, try_reorder=True):
     
     return g, num_groups
 
+
 def stencil_block_diagonals(ndims=1, axes_diagonals=[], axes_blocks=[-1], periodic_axes=[]):
     """
     Generate a stencil pattern for block diagonals.
@@ -401,6 +409,7 @@ def stencil_block_diagonals(ndims=1, axes_diagonals=[], axes_blocks=[-1], period
             dependencies.append(dep)
     return dependencies
 
+
 def precompute_perturbations(c, dc, num_gr, gr):
     """
     Precompute perturbed values of the input array for numerical Jacobian computation.
@@ -417,6 +426,7 @@ def precompute_perturbations(c, dc, num_gr, gr):
     c_perturb = np.tile(c[np.newaxis, ...], (num_gr,) + (1,) * c.ndim)
     c_perturb.ravel()[c.size * gr.ravel() + np.arange(c.size)] += dc.ravel()
     return c_perturb
+
 
 @njit(parallel=True)
 def precompute_perturbations_numba(c, dc, num_gr, gr):
@@ -449,6 +459,7 @@ def precompute_perturbations_numba(c, dc, num_gr, gr):
     c_perturb = c_perturb_flat.reshape((num_gr,) + c.shape)
     return c_perturb
 
+
 @njit(parallel=True)
 def compute_df(f_value, perturbed_values, num_gr):
     """
@@ -467,6 +478,7 @@ def compute_df(f_value, perturbed_values, num_gr):
         df[k, ...] = (perturbed_values[k, ...] - f_value)
     return df
 
+
 def compute_df2(f, f_value, c_values, num_gr):
     """
     Compute the difference in function values for perturbed inputs by evaluating the function.
@@ -484,6 +496,7 @@ def compute_df2(f, f_value, c_values, num_gr):
     for k in prange(num_gr):
         df[k, ...] = (f(c_values[k, ...]) - f_value)
     return df
+
 
 class NumJac:
     """

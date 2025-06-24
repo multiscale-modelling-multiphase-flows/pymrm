@@ -16,6 +16,7 @@ Authors:
 
 import numpy as np
 
+
 def non_uniform_grid(left_bound, right_bound, num_points, dx_inf, factor):
     """
     Generate a non-uniform grid of points in the interval [left_bound, right_bound].
