@@ -42,7 +42,12 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-
+    - name: Install myst-parser
+      run: pip install myst-parser
+    - name: Ensure _static directory exists
+      run: mkdir -p docs/sphinx/_static
+    - name: Install pymrm in editable mode
+      run: pip install -e .
     - name: Run Sphinx
       run: scripts/build_documentation.sh
 
