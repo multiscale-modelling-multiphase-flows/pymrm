@@ -5,4 +5,4 @@
 # execute from root folder!
 
 python -m pip install -e .
-pytest --cov=. --import-mode=importlib --cov-report=html --cov-report=xml:test/coverage.xml --cov-config=.coveragerc
+pytest --junitxml=test/pytest-results.xml --cov=. --import-mode=importlib --cov-report=html --cov-report=xml:test/coverage.xml --cov-config=.coveragerc
