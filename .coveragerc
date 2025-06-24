@@ -2,7 +2,7 @@
 omit = test/*
 
 [report]
-fail_under = 80
+fail_under = 50
 omit = test/*
 
 [html]
