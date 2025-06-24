@@ -537,11 +537,47 @@ class NumJac:
 
     def init_stencil(self, stencil, **kwargs):
         """
-        Initialize the stencil pattern.
+        Initialize and process the stencil (dependency pattern) for numerical Jacobian computation.
 
-        Parameters:
-        - stencil (callable): Function to generate the stencil.
-        - **kwargs: Additional keyword arguments passed to the stencil function.
+        This method configures the sparsity/dependency structure used to compute numerical Jacobians,
+        supporting a variety of stencil specifications. The stencil can be supplied as either:
+
+        - A function (callable) that generates a dependency pattern in PyMRM dependency notation.
+            The function should accept the keyword argument `ndims` (number of dimensions)
+            and any additional keyword arguments.
+        - A pre-defined dependency specification (e.g., list or tuple) in any accepted PyMRM format,
+            including full or shorthand forms.
+
+        The stencil is expanded using PyMRM's dependency notation, which allows concise or explicit
+        description of dependencies between positions in multidimensional fields. The result is used
+        to generate the internal sparsity pattern for efficient Jacobian assembly.
+
+        Parameters
+        ----------
+        stencil : callable or list or tuple
+            Specification of the dependency pattern. Either a function that returns a dependency
+            pattern in PyMRM notation (when called with `ndims` and additional `**kwargs`), or
+            a direct specification as a list or tuple following the PyMRM dependency notation.
+            See the PyMRM documentation for details on the allowed formats.
+        **kwargs
+            Additional keyword arguments passed to the stencil function (if `stencil` is callable).
+
+        Raises
+        ------
+        ValueError
+            If no stencil is provided.
+
+        Side Effects
+        ------------
+        Sets the following attributes on the class:
+        - `self.dependencies`: Fully expanded dependency list (PyMRM notation).
+        - `self.rows, self.cols`: Row/column indices for the Jacobian sparsity pattern.
+        - `self.gr, self.num_gr`: Grouping information for column grouping.
+
+        References
+        ----------
+        For a full description of the PyMRM dependency notation, see:
+        - `dependencies_format.md` in the PyMRM package.
         """
         if stencil is None:
             raise ValueError("A stencil function or stencil specification must be provided.")
@@ -553,7 +589,7 @@ class NumJac:
         self.rows, self.cols = generate_sparsity_pattern(self.shape_in, self.shape_out, self.dependencies)
         self.gr, self.num_gr = colgroup(self.rows, self.cols, shape = (np.prod(self.shape_out), np.prod(self.shape_in)))
         
-    def __call__(self, f, c):
+    def __call__(self, f, c, f_value=None):
         """
         Compute the numerical Jacobian for a given function and input array.
 
@@ -564,7 +600,8 @@ class NumJac:
         Returns:
         - tuple: (Function value, Jacobian as a sparse matrix).
         """
-        f_value = f(c)
+        if f_value is None:
+            f_value = f(c)
         dc = -self.eps_jac * np.abs(c)
         dc[dc > (-self.eps_jac)] = self.eps_jac
         dc = (c + dc) - c
