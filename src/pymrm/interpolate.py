@@ -24,6 +24,11 @@ Functions:
 - compute_boundary_values(cell_centered_values, x_f, x_c=None, bc=None, axis=0)
     Compute boundary values and gradients for cell-centered values.
 
+- construct_boundary_value_matrices(shape, x_f, x_c=None, bc=None, axis=0)
+    Construct matrices that provide values on domain boundaries based on cell-centered values.
+
+
+
 Dependencies:
 -------------
 - numpy: For array manipulations.
@@ -303,8 +308,7 @@ def create_staggered_array(array, shape, axis, x_f=None, x_c=None):
     array_f = np.broadcast_to(array_f, shape_f)
     return array_f
 
-
-def compute_boundary_values(cell_centered_values, x_f, x_c=None, bc=None, axis=0):
+def compute_boundary_values(cell_centered_values, x_f, x_c=None, bc=None, axis=0, bound_id=None):
     """
     Compute boundary values and gradients for cell-centered values.
 
@@ -314,13 +318,17 @@ def compute_boundary_values(cell_centered_values, x_f, x_c=None, bc=None, axis=0
         x_c (ndarray, optional): Positions of cell centers. If None, midpoints are used.
         bc (tuple, optional): Boundary conditions as dictionaries with keys 'a', 'b', and 'd'.
         axis (int, optional): Axis along which to compute boundary values. Default is 0.
+        bound_id (int, optional): Identifier for the boundary condition. Must be None, 0 or 1. Default is None.
 
     Returns:
-        tuple:
-            - ndarray: Boundary values at the lower boundary.
-            - ndarray: Gradients at the lower boundary.
-            - ndarray: Boundary values at the upper boundary.
-            - ndarray: Gradients at the upper boundary.
+        if bound_id is 0 or 1:
+            ndarray: Boundary values at the boundary.
+            ndarray: Gradients at the boundary.
+        if bound_id is None:
+            ndarray: Boundary values at the 0-boundary.
+            ndarray: Gradients at the 0-boundary.
+            ndarray: Boundary values at the 1-boundary.
+            ndarray: Gradients at the 1-boundary.
     """
     shape = list(cell_centered_values.shape)
     if axis < 0:
@@ -334,12 +342,27 @@ def compute_boundary_values(cell_centered_values, x_f, x_c=None, bc=None, axis=0
     shape_bc_d = [shape_t[0], shape_t[2]]
     cell_centered_values = cell_centered_values.reshape(shape_t)
 
-    if bc is None:
-        bc = ({'a':0,'b':0,'d':0}, {'a':0,'b':0,'d':0})
-    if bc[0] is None:
-        bc[0] = {'a':0,'b':0,'d':0}
-    if bc[1] is None:
-        bc[1] = {'a':0,'b':0,'d':0}
+    if bound_id is None:
+        bounds = [0,1]
+    else:
+        bounds = [bound_id]
+
+    if bound_id is None or shape_t[1] == 1:
+        if bc is None:
+            bc = ({'a':0,'b':0,'d':0}, {'a':0,'b':0,'d':0})
+        elif not isinstance(bc, tuple) and len(bc) != 2:
+            raise ValueError("Boundary conditions must be a tuple of 2 dictionaries when 2 boundary conditions are required.")
+        if bc[0] is None:
+            bc[0] = {'a':0,'b':0,'d':0}
+        if bc[1] is None:
+            bc[1] = {'a':0,'b':0,'d':0}
+    else:
+        if bc is None:
+            bc = {'a':0,'b':0,'d':0}
+        if bound_id == 0:
+            bc = (bc, None)
+        else:
+            bc = (None, bc)
 
     if shape_t[1] == 1:
         if x_c is None:
@@ -347,115 +370,185 @@ def compute_boundary_values(cell_centered_values, x_f, x_c=None, bc=None, axis=0
         a, b, d = [[unwrap_bc_coeff(shape, bc_elem[key], axis=axis) if bc_elem else np.zeros((1,)*len(shape)) for bc_elem in bc] for key in ['a', 'b', 'd']]
         alpha_1 = (x_f[1] - x_f[0]) / (
             (x_c[0] - x_f[0]) * (x_f[1] - x_c[0]))
-        alpha_2_left = (x_c[0] - x_f[0]) / (
-            (x_f[1] - x_f[0]) * (x_f[1] - x_c[0]))
-        alpha_0_left = alpha_1 - alpha_2_left
-        alpha_2_right = -(x_c[0] - x_f[1]) / (
-            (x_f[0] - x_f[1]) * (x_f[0] - x_c[0]))
-        alpha_0_right = alpha_1 - alpha_2_right
-        fctr = ((b[0] + alpha_0_left * a[0]) * (b[1] +
-                                            alpha_0_right * a[1]) - alpha_2_left * alpha_2_right * a[0] * a[1])
+        alpha_2= [(x_c[0] - x_f[0]) / (
+            (x_f[1] - x_f[0]) * (x_f[1] - x_c[0])),
+         -(x_c[0] - x_f[1]) / (
+            (x_f[0] - x_f[1]) * (x_f[0] - x_c[0]))]
+        alpha_0 = [alpha_1 - alpha_2[0], alpha_1 - alpha_2[1]]
+
+        fctr = ((b[0] + alpha_0[0] * a[0]) * (b[1] +
+                                            alpha_0[1] * a[1]) - alpha_2[0] * alpha_2[1] * a[0] * a[1])
         np.divide(1, fctr, out=fctr, where=(fctr != 0))
-        fctr_i = (alpha_1 * (a[1] * (alpha_0_right - alpha_2_left) + b[1])
-                  * fctr)
-        fctr_m = a[0] * fctr_i
-        fctr_m = np.broadcast_to(fctr_m, shape_bc)
-        fctr_m = np.reshape(fctr_m, shape_bc_d)
-        boundary_values_0 = fctr_m*cell_centered_values[:, 0, :]
-        fctr_m = b[0] * fctr_i
-        fctr_m = np.broadcast_to(fctr_m, shape_bc)
-        fctr_m = np.reshape(fctr_m, shape_bc_d)
-        boundary_grads_0 = fctr_m*cell_centered_values[:, 0, :]
 
-        fctr_i = (alpha_1 * (a[0] * (alpha_0_left - alpha_2_right) + b[0])* fctr)
-        fctr_m = a[1] * fctr_i
-        fctr_m = np.broadcast_to(fctr_m, shape_bc)
-        fctr_m = np.reshape(fctr_m, shape_bc_d)
-        boundary_values_1 = fctr_m*cell_centered_values[:, 0, :]
-        fctr_m = -b[1] * fctr_i
-        boundary_grads_1 = fctr_m*cell_centered_values[:, 0, :]
-
-
-        fctr_m = ((a[1] * alpha_0_right + b[1]) * d[0] -
-                  alpha_2_left * a[0] * d[1]) * fctr
-        fctr_m = np.broadcast_to(fctr_m, shape_bc)
-        fctr_m = np.reshape(fctr_m, shape_bc_d)
-        boundary_values_0[...] += fctr_m
-        fctr_m = ((a[1] * (-alpha_0_left * alpha_0_right + alpha_2_left * alpha_2_right) - alpha_0_left *
-                 b[1]) * d[0] - alpha_2_left * b[0] * d[1]) * fctr
-        fctr_m = np.broadcast_to(fctr_m, shape_bc)
-        fctr_m = np.reshape(fctr_m, shape_bc_d)
-        boundary_grads_0[...] += fctr_m
-        
-        fctr_m = ((a[0] * alpha_0_left + b[0]) * d[1] -
-                  alpha_2_right * a[1] * d[0]) * fctr
-        fctr_m = np.broadcast_to(fctr_m, shape_bc)
-        fctr_m = np.reshape(fctr_m, shape_bc_d)
-        boundary_values_1[...] += fctr_m
-        fctr_m = ((a[0] * (+alpha_0_left * alpha_0_right - alpha_2_left * alpha_2_right) + alpha_0_right *
-                 b[0]) * d[1] + alpha_2_right * b[1] * d[0]) * fctr
-        fctr_m = np.broadcast_to(fctr_m, shape_bc)
-        fctr_m = np.reshape(fctr_m, shape_bc_d)
-        boundary_grads_1[...] += fctr_m
+        boundary_values = [None, None]
+        boundary_grads = [None, None]
+        for i in bounds:
+            if i==0:
+                j = 1
+                sgn = 1
+            else:
+                j = 0
+                sgn = -1
+            fctr_i = (alpha_1 * (a[j] * (alpha_0[j] - alpha_2[i]) + b[j])
+                    * fctr)
+            fctr_m = a[i] * fctr_i
+            fctr_m = np.broadcast_to(fctr_m, shape_bc)
+            fctr_m = np.reshape(fctr_m, shape_bc_d)
+            boundary_values[i] = fctr_m*cell_centered_values[:, 0, :]
+            fctr_m = b[i] * fctr_i
+            fctr_m = np.broadcast_to(fctr_m, shape_bc)
+            fctr_m = np.reshape(fctr_m, shape_bc_d)
+            boundary_grads[i] = sgn*fctr_m*cell_centered_values[:, 0, :]
+            
+            fctr_m = ((a[j] * alpha_0[j] + b[j]) * d[i] -
+                    alpha_2[i] * a[i] * d[j]) * fctr
+            fctr_m = np.broadcast_to(fctr_m, shape_bc)
+            fctr_m = np.reshape(fctr_m, shape_bc_d)
+            boundary_values[i][...] += fctr_m
+            fctr_m = ((a[j] * (-alpha_0[i] * alpha_0[j] + alpha_2[i] * alpha_2[j]) - alpha_0[i] *
+                    b[j]) * d[i] - alpha_2[i] * b[i] * d[j]) * fctr
+            fctr_m = np.broadcast_to(fctr_m, shape_bc)
+            fctr_m = np.reshape(fctr_m, shape_bc_d)
+            boundary_grads[i][...] += sgn*fctr_m
+            boundary_values[i] = boundary_values[i].reshape(shape_bc)
+            boundary_grads[i] = boundary_grads[i].reshape(shape_bc)
     else:
         if x_c is None:
             x_c = np.concatenate((0.5*(x_f[0:2]+x_f[1:3]), 0.5 *(x_f[-3:-1]+x_f[-2:])))
-        # bc 0
-        a, b, d = [unwrap_bc_coeff(shape, bc[0][key], axis=axis) if bc[0] else np.zeros((1,)*len(shape)) for key in ['a', 'b', 'd']]
-        alpha_1 = (x_c[1] - x_f[0]) / (
-            (x_c[0] - x_f[0]) * (x_c[1] - x_c[0]))
-        alpha_2 = (x_c[0] - x_f[0]) / (
-            (x_c[1] - x_f[0]) * (x_c[1] - x_c[0]))
-        alpha_0 = alpha_1 - alpha_2
-        fctr = (alpha_0 * a + b)
-        np.divide(1, fctr, out=fctr, where=(fctr != 0))
-        a_fctr = a * fctr
-        a_fctr = np.broadcast_to(a_fctr, shape_bc)
-        a_fctr = np.reshape(a_fctr, shape_bc_d)
-        b_fctr = b * fctr
-        b_fctr = np.broadcast_to(b_fctr, shape_bc)
-        b_fctr = np.reshape(b_fctr, shape_bc_d)
-        d_fctr = d * fctr
-        d_fctr = np.broadcast_to(d_fctr, shape_bc)
-        d_fctr = np.reshape(d_fctr, shape_bc_d)
-        boundary_values_0 = (
-            d_fctr + a_fctr*(alpha_1*cell_centered_values[:, 0, :] - alpha_2*cell_centered_values[:, 1, :]))
-        boundary_grads_0 = (
-            -alpha_0*d_fctr + b_fctr*(alpha_1*cell_centered_values[:, 0, :] - alpha_2*cell_centered_values[:, 1, :]))
-        if np.any(fctr==0.0):
-            fltr = np.reshape(np.broadcast_to((fctr == 0.0), shape_bc), shape_bc_d)
-            boundary_values_0[fltr] = ((x_c[1] - x_f[0])/ (x_c[1] - x_c[0])) * cell_centered_values[:, 0, :][fltr] +  ((x_c[0] - x_f[0])/ (x_c[0] - x_c[1])) * cell_centered_values[:, 1, :][fltr]
-            boundary_grads_0[fltr] =  (1.0 / (x_c[1] - x_c[0])) * (cell_centered_values[:, 1, :][fltr]-cell_centered_values[:, 0, :][fltr])
+        for i in bounds:
+            if i==0:
+                j = 1
+                sgn = 1
+                idx_0 = 0
+                idx_1 = 1
+            else:
+                j = 0
+                sgn = -1
+                idx_0 = -1
+                idx_1 = -2
+            
+            # bc 0
+            a, b, d = [unwrap_bc_coeff(shape, bc[i][key], axis=axis) if bc[i] else np.zeros((1,)*len(shape)) for key in ['a', 'b', 'd']]
+            alpha_1 = (x_c[idx_1] - x_f[idx_0]) / (
+                (x_c[idx_0] - x_f[idx_0]) * (x_c[idx_1] - x_c[idx_0]))
+            alpha_2 = (x_c[idx_0] - x_f[idx_0]) / (
+                (x_c[idx_1] - x_f[idx_0]) * (x_c[idx_1] - x_c[idx_0]))
+            alpha_0 = alpha_1 - alpha_2
+            fctr = (alpha_0 * a + b)
+            np.divide(1, fctr, out=fctr, where=(fctr != 0))
+            a_fctr = a * fctr
+            a_fctr = np.broadcast_to(a_fctr, shape_bc)
+            a_fctr = np.reshape(a_fctr, shape_bc_d)
+            b_fctr = b * fctr
+            b_fctr = np.broadcast_to(b_fctr, shape_bc)
+            b_fctr = np.reshape(b_fctr, shape_bc_d)
+            d_fctr = d * fctr
+            d_fctr = np.broadcast_to(d_fctr, shape_bc)
+            d_fctr = np.reshape(d_fctr, shape_bc_d)
+            boundary_values[i] = (
+                d_fctr + a_fctr*(alpha_1*cell_centered_values[:, idx_0, :] - alpha_2*cell_centered_values[:, idx_1, :]))
+            boundary_grads[i] = sgn*(
+                -alpha_0*d_fctr + b_fctr*(alpha_1*cell_centered_values[:, idx_0, :] - alpha_2*cell_centered_values[:, idx_1, :]))
+            if np.any(fctr==0.0):
+                fltr = np.reshape(np.broadcast_to((fctr == 0.0), shape_bc), shape_bc_d)
+                boundary_values[i][fltr] = ((x_c[idx_1] - x_f[idx_0])/ (x_c[idx_1] - x_c[idx_0])) * cell_centered_values[:, idx_0, :][fltr] +  ((x_c[idx_0] - x_f[idx_0])/ (x_c[idx_0] - x_c[idx_1])) * cell_centered_values[:, idx_1, :][fltr]
+                boundary_grads[i][fltr] =  (1.0 / (x_c[idx_1] - x_c[idx_0])) * (cell_centered_values[:, idx_1, :][fltr]-cell_centered_values[:, idx_0, :][fltr])
+            boundary_values[i] = boundary_values[i].reshape(shape_bc)
+            boundary_grads[i] = boundary_grads[i].reshape(shape_bc)
 
-        # bc 1
-        a, b, d = [unwrap_bc_coeff(shape, bc[1][key], axis=axis) if bc[1] else np.zeros((1,)*len(shape)) for key in ['a', 'b', 'd']]
-        alpha_1 = -(x_c[-2] - x_f[-1]) / (
-            (x_c[-1] - x_f[-1]) * (x_c[-2] - x_c[-1]))
-        alpha_2 = -(x_c[-1] - x_f[-1]) / (
-            (x_c[-2] - x_f[-1]) * (x_c[-2] - x_c[-1]))
-        alpha_0 = alpha_1 - alpha_2
-        fctr = (alpha_0 * a + b)
-        np.divide(1, fctr, out=fctr, where=(fctr != 0))
-        a_fctr = a * fctr
-        a_fctr = np.broadcast_to(a_fctr, shape_bc)
-        a_fctr = np.reshape(a_fctr, shape_bc_d)
-        b_fctr = b * fctr
-        b_fctr = np.broadcast_to(b_fctr, shape_bc)
-        b_fctr = np.reshape(b_fctr, shape_bc_d)
-        d_fctr = d * fctr
-        d_fctr = np.broadcast_to(d_fctr, shape_bc)
-        d_fctr = np.reshape(d_fctr, shape_bc_d)
-        boundary_values_1 = (d_fctr + a_fctr*(
-            alpha_1*cell_centered_values[:, -1, :] - alpha_2*cell_centered_values[:, -2, :]))
-        boundary_grads_1 = alpha_0*d_fctr - b_fctr*(
-            alpha_1*cell_centered_values[:, -1, :] - alpha_2*cell_centered_values[:, -2, :])
-        if np.any(fctr==0.0):
-            fltr = np.reshape(np.broadcast_to((fctr == 0.0), shape_bc), shape_bc_d)
-            boundary_values_1[fltr] = ((x_c[-2] - x_f[-1])/ (x_c[-2] - x_c[-1])) * cell_centered_values[:, -1, :][fltr] +  ((x_c[-1] - x_f[-1])/ (x_c[-1] - x_c[-2])) * cell_centered_values[:, -2, :][fltr]
-            boundary_grads_1[fltr] =  (1.0 / (x_c[-1] - x_c[-2])) * (cell_centered_values[:, -1, :][fltr]-cell_centered_values[:, -2, :][fltr])
+    if bound_id is None:
+        return boundary_values[0], boundary_grads[0], boundary_values[1], boundary_grads[1]
+    else:
+        return boundary_values[bound_id], boundary_grads[bound_id]
 
-    boundary_values_0 = boundary_values_0.reshape(shape_bc)
-    boundary_values_1 = boundary_values_1.reshape(shape_bc)
-    boundary_grads_0 = boundary_grads_0.reshape(shape_bc)
-    boundary_grads_1 = boundary_grads_1.reshape(shape_bc)
-    return boundary_values_0, boundary_grads_0, boundary_values_1, boundary_grads_1
+def construct_boundary_value_matrices(shape, x_f, x_c=None, bc=None, axis=0, bound_id=0, shape_d=None):
+    """
+    Constructs thr matrices that can be used to compute boundary values
+
+    Args:
+        shape (tuple): Shape of the multi-dimensional array.
+        x_f (ndarray): Face positions.
+        x_c (ndarray, optional): Cell-centered positions. If not provided, it is calculated based on the face array.
+        bc (dictionary, optional): Boundary condition as dictionary with keys 'a', 'b', 'd'. Default is None.
+        axis (int, optional): The axis along which the numerical differentiation is performed. Default is 0.
+        bound_id (int, optional): Identifier for the boundary condition. Must be 0 or 1. Default is 0.
+        shape_d (tuple, optional): Shape for inhomogeneous boundary condition matrices. Default is None.
+
+    Returns:
+        csc_array: homogeneous-part matrix
+        csc_array: inhomogeneous-part matrix
+    """
+
+    if bound_id not in (0, 1):
+        raise ValueError("bound_id must be 0 or 1")
+
+    # Trick: Reshape to triplet shape_t
+    shape_f = shape[:axis] + (shape[axis] + 1,) + shape[axis + 1:]
+    shape_t = (math.prod(shape[:axis]), shape[axis], math.prod(shape[axis + 1:]))
+    shape_f_t = (shape_t[0], shape_f[axis], shape_t[2])
+    shape_bc = shape[:axis] + (1,) + shape[axis + 1:]
+    shape_bc_d = (shape_t[0], shape_t[2])
+
+    # Handle special case with one cell in the dimension axis
+
+    if bound_id == 0:
+        idx_c_0 = 0
+        idx_c_1 = 1
+        idx_0 = 0
+        idx_1 = 1
+    else:
+        idx_c_0 = shape_t[1]-2
+        idx_c_1 = shape_t[1]-1
+        idx_0 = -1
+        idx_1 = -2
+    if x_c is None:
+        if bound_id == 0:       
+            x_c = 0.5 * np.array([x_f[0] + x_f[1],
+                                    x_f[1] + x_f[2]])
+        else:
+            x_c = 0.5 * np.array([x_f[-3] + x_f[-2],
+                                    x_f[-2] + x_f[-1]])
+    i_c = (shape_t[1] * shape_t[2] * np.arange(shape_t[0]).reshape(-1, 1, 1)
+            + shape_t[2] * np.array([idx_c_0, idx_c_1]).reshape((1, -1, 1))
+            + np.arange(shape_t[2]).reshape((1, 1, -1)))
+    i_f = (shape_t[2] * np.arange(shape_t[0]).reshape(-1, 1, 1)
+            + np.array([0, 0]).reshape((1, -1, 1))
+            + np.arange(shape_t[2]).reshape((1, 1, -1)))
+    i_f_bc = (shape_f_t[2] * np.arange(shape_f_t[0]).reshape((-1, 1, 1))
+                + np.arange(shape_f_t[2]).reshape((1, 1, -1)))
+    values_bc = np.empty((shape_t[0], shape_t[2]))
+    values = np.empty((shape_t[0], 2, shape_t[2]))
+
+    # Get a, b, and d from dictionary
+    a, b, d = [unwrap_bc_coeff(shape, bc[key], axis=axis) if bc[bound_id] else np.zeros((1,)*len(shape)) for key in ['a', 'b', 'd']]
+    alpha_1 = (x_c[idx_1] - x_f[idx_0]) / (
+        (x_c[idx_0] - x_f[idx_0]) * (x_c[idx_1] - x_c[idx_0]))
+    alpha_2 = (x_c[idx_0] - x_f[idx_0]) / (
+        (x_c[idx_1] - x_f[idx_0]) * (x_c[idx_1] - x_c[idx_0]))
+    alpha_0 = alpha_1 - alpha_2
+    fctr = (alpha_0 * a + b)
+    np.divide(1, fctr, out=fctr, where=(fctr != 0))
+    a_fctr = a * fctr
+    a_fctr = np.broadcast_to(a_fctr, shape_bc).reshape(shape_bc_d)
+    d_fctr = d * fctr
+    d_fctr = np.broadcast_to(d_fctr, shape_bc).reshape(shape_bc_d)
+    values[:, idx_0, :] = (a_fctr * alpha_1)
+    values[:, idx_1, :] = -a_fctr * alpha_2
+    values_bc[:, :] = d_fctr
+    if np.any(fctr==0.0):
+        fltr = np.reshape(np.broadcast_to((fctr == 0.0), shape_bc), shape_bc_d)
+        values[:, idx_0, :][fltr] = (x_c[idx_1] - x_f[idx_0])/ (x_c[idx_1] - x_c[idx_0])
+        values[:, idx_1, :][fltr] = (x_c[idx_0] - x_f[idx_0])/ (x_c[idx_0] - x_c[idx_1])
+        values_bc[fltr] = 0.0
+
+    matrix = csc_array((values.ravel(), (i_f.ravel(), i_c.ravel())), shape=(math.prod(shape_bc), math.prod(shape_t)))
+    matrix.sort_indices()
+    if (shape_d is None):
+        mat_bc = csc_array((values_bc.ravel(), i_f_bc.ravel(), [0, i_f_bc.size]), shape=(math.prod(shape_bc), 1))
+    else:
+        num_cols = math.prod(shape_d)
+        i_cols_bc = np.arange(num_cols, dtype=int).reshape(shape_d)
+        i_cols_bc = np.broadcast_to(i_cols_bc, shape_bc)
+        mat_bc = csc_array((values_bc.ravel(), (i_f_bc.ravel(), i_cols_bc.ravel())),
+                                shape=(math.prod(shape_bc), num_cols))
+    return matrix, mat_bc
