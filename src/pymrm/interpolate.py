@@ -24,10 +24,8 @@ Functions:
 - compute_boundary_values(cell_centered_values, x_f, x_c=None, bc=None, axis=0)
     Compute boundary values and gradients for cell-centered values.
 
-- construct_boundary_value_matrices(shape, x_f, x_c=None, bc=None, axis=0)
+- (shape, x_f, x_c=None, bc=None, axis=0, bound_id=0, shape_d=None)
     Construct matrices that provide values on domain boundaries based on cell-centered values.
-
-
 
 Dependencies:
 -------------
@@ -37,8 +35,8 @@ Dependencies:
 
 import math
 import numpy as np
+from scipy.sparse import csc_array
 from .helpers import unwrap_bc_coeff
-
 
 def interp_stagg_to_cntr(staggered_values, x_f, x_c=None, axis=0):
     """
@@ -364,6 +362,9 @@ def compute_boundary_values(cell_centered_values, x_f, x_c=None, bc=None, axis=0
         else:
             bc = (None, bc)
 
+    boundary_values = [None, None]
+    boundary_grads = [None, None]
+    
     if shape_t[1] == 1:
         if x_c is None:
             x_c = 0.5*(x_f[:-1]+x_f[1:])
@@ -380,8 +381,6 @@ def compute_boundary_values(cell_centered_values, x_f, x_c=None, bc=None, axis=0
                                             alpha_0[1] * a[1]) - alpha_2[0] * alpha_2[1] * a[0] * a[1])
         np.divide(1, fctr, out=fctr, where=(fctr != 0))
 
-        boundary_values = [None, None]
-        boundary_grads = [None, None]
         for i in bounds:
             if i==0:
                 j = 1
@@ -427,13 +426,13 @@ def compute_boundary_values(cell_centered_values, x_f, x_c=None, bc=None, axis=0
                 idx_0 = -1
                 idx_1 = -2
             
-            # bc 0
             a, b, d = [unwrap_bc_coeff(shape, bc[i][key], axis=axis) if bc[i] else np.zeros((1,)*len(shape)) for key in ['a', 'b', 'd']]
             alpha_1 = (x_c[idx_1] - x_f[idx_0]) / (
                 (x_c[idx_0] - x_f[idx_0]) * (x_c[idx_1] - x_c[idx_0]))
             alpha_2 = (x_c[idx_0] - x_f[idx_0]) / (
                 (x_c[idx_1] - x_f[idx_0]) * (x_c[idx_1] - x_c[idx_0]))
             alpha_0 = alpha_1 - alpha_2
+            a *= sgn
             fctr = (alpha_0 * a + b)
             np.divide(1, fctr, out=fctr, where=(fctr != 0))
             a_fctr = a * fctr
@@ -447,7 +446,7 @@ def compute_boundary_values(cell_centered_values, x_f, x_c=None, bc=None, axis=0
             d_fctr = np.reshape(d_fctr, shape_bc_d)
             boundary_values[i] = (
                 d_fctr + a_fctr*(alpha_1*cell_centered_values[:, idx_0, :] - alpha_2*cell_centered_values[:, idx_1, :]))
-            boundary_grads[i] = sgn*(
+            boundary_grads[i] = (
                 -alpha_0*d_fctr + b_fctr*(alpha_1*cell_centered_values[:, idx_0, :] - alpha_2*cell_centered_values[:, idx_1, :]))
             if np.any(fctr==0.0):
                 fltr = np.reshape(np.broadcast_to((fctr == 0.0), shape_bc), shape_bc_d)
@@ -496,11 +495,13 @@ def construct_boundary_value_matrices(shape, x_f, x_c=None, bc=None, axis=0, bou
         idx_c_1 = 1
         idx_0 = 0
         idx_1 = 1
+        sgn = 1
     else:
         idx_c_0 = shape_t[1]-2
         idx_c_1 = shape_t[1]-1
         idx_0 = -1
         idx_1 = -2
+        sgn = -1
     if x_c is None:
         if bound_id == 0:       
             x_c = 0.5 * np.array([x_f[0] + x_f[1],
@@ -520,7 +521,8 @@ def construct_boundary_value_matrices(shape, x_f, x_c=None, bc=None, axis=0, bou
     values = np.empty((shape_t[0], 2, shape_t[2]))
 
     # Get a, b, and d from dictionary
-    a, b, d = [unwrap_bc_coeff(shape, bc[key], axis=axis) if bc[bound_id] else np.zeros((1,)*len(shape)) for key in ['a', 'b', 'd']]
+    a, b, d = [unwrap_bc_coeff(shape, bc[key], axis=axis) if bc else np.zeros((1,)*len(shape)) for key in ['a', 'b', 'd']]
+    a *= sgn
     alpha_1 = (x_c[idx_1] - x_f[idx_0]) / (
         (x_c[idx_0] - x_f[idx_0]) * (x_c[idx_1] - x_c[idx_0]))
     alpha_2 = (x_c[idx_0] - x_f[idx_0]) / (
