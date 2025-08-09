@@ -57,8 +57,8 @@ It is recommended to use a virtual environment to isolate your project dependenc
      source .venv/bin/activate
      ```
 
-3. **Trouble shooting Windows Powershell**
-   When using Windows Powershell it sometimes refuses to execute scripts, and it refuses to run the `activate` script. In that case run Powershell as an administrator and execute the command:
+3. **Troubleshooting Windows PowerShell**
+   When using Windows PowerShell, it sometimes refuses to execute scripts, and it refuses to run the `activate` script. In that case, run PowerShell as an administrator and execute the command:
    ```sh
    Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
    ```
