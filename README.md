@@ -25,6 +25,14 @@ Start with the tutorials in the [`tutorials`](https://github.com/multiscale-mode
 
 For extensive documentation, exercises, and additional resources, visit the [PyMRM documentation site](https://multiscale-modelling-multiphase-flows.github.io/pymrm-book).
 
+## Helper utilities
+
+Small building blocks used throughout the package are documented in
+[`docs/helpers.md`](docs/helpers.md). These utilities assist with
+handling boundary-condition coefficients and constructing sparse
+coefficient matrices.
+
 ## Contributing
 
 Contributions are welcome! For suggestions or enhancements, please contact us or submit a pull request.
+

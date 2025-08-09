@@ -1,13 +1,19 @@
-"""
-Helper functions for common operations in the pymrm package.
+"""pymrm.helpers
+=================
 
-This module provides utility functions that support various operations across
-different submodules, such as boundary condition handling, constructing coefficient
-matrices, and creating staggered arrays for finite volume discretizations.
+Utility helpers used throughout :mod:`pymrm`.
 
-Functions:
-- unwrap_bc_coeff: Process boundary coefficients for numerical schemes.
-- construct_coefficient_matrix: Create diagonal coefficient matrices.
+The functions in this module provide small building blocks that are reused in
+multiple numerical routines.  They focus on preparing arrays for boundary
+conditions and on constructing sparse coefficient matrices that are used in the
+finite volume discretisation implemented by the package.
+
+Functions
+---------
+``unwrap_bc_coeff``
+    Expand boundary-condition coefficients to match an arbitrary domain shape.
+``construct_coefficient_matrix``
+    Create a sparse diagonal matrix from coefficient values.
 """
 
 import numpy as np
@@ -15,15 +21,23 @@ from scipy.sparse import diags, csc_array
 
 
 def unwrap_bc_coeff(shape, bc_coeff, axis=0):
-    """
-    Unwrap the boundary conditions for a given shape.
+    """Expand boundary-condition coefficients to match a domain shape.
 
-    Args:
-        shape (tuple): Shape of the domain.
-        bc_coeff (dict): Boundary condition coefficient, e.g., a, b, d.
+    Parameters
+    ----------
+    shape : tuple of int
+        Target shape of the domain.
+    bc_coeff : array_like
+        Boundary-condition coefficient (e.g. ``a``, ``b`` or ``d`` terms).
+    axis : int, optional
+        Axis along which the coefficient applies.  The coefficient is expanded
+        along this axis when needed.  Default is ``0``.
 
-    Returns:
-        numpy array: Unwrapped boundary condition coefficient
+    Returns
+    -------
+    numpy.ndarray
+        Array broadcast to ``shape`` containing the boundary-condition
+        coefficients.
     """
     if not isinstance(shape, (list, tuple)):
         lgth_shape = 1
@@ -40,16 +54,25 @@ def unwrap_bc_coeff(shape, bc_coeff, axis=0):
 
 
 def construct_coefficient_matrix(coefficients, shape=None, axis=None):
-    """
-    Construct a diagonal matrix with coefficients on its diagonal.
+    """Return a sparse diagonal matrix from coefficient values.
 
-    Args:
-        coefficients (ndarray or list): Values of the coefficients.
-        shape (tuple, optional): Shape of the multidimensional field.
-        axis (int, optional): Axis for broadcasting in staggered grids.
+    Parameters
+    ----------
+    coefficients : array_like
+        Values to place on the diagonal of the matrix.
+    shape : tuple of int, optional
+        Shape of the multidimensional field to which the coefficients should be
+        broadcast.  If ``None`` (default), the coefficients are used as
+        provided.
+    axis : int, optional
+        Axis along which coefficients are defined for staggered grids.  When
+        given, the size of this axis is incremented by one to account for
+        face-centred values.
 
-    Returns:
-        csc_array: Sparse diagonal matrix of coefficients.
+    Returns
+    -------
+    scipy.sparse.csc_array
+        Sparse diagonal matrix containing the coefficients.
     """
     if shape is None:
         coeff_matrix = csc_array(diags(coefficients.ravel(), format='csc'))
