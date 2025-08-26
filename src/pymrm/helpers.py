@@ -56,25 +56,31 @@ def unwrap_bc_coeff(shape, bc_coeff, axis=0):
 
 def construct_coefficient_matrix(coefficients, shape=None, axis=None):
     """
-    Build a sparse coefficient matrix with optional broadcasting and (row,col) coupling.
+    Build a sparse coefficient matrix with optional broadcasting and (row, col) coupling.
 
-    Modes:
-      1) shape is None:
-         Treat coefficients as a flat list placed on the diagonal of an N×N matrix.
-      2) shape is a single tuple, e.g. (Nz, Nr, ...):
-         Broadcast coefficients to that multidimensional shape (expanding leading 1-sized
-         dims as needed) then place all values on the diagonal of a square matrix of size
-         prod(shape). If axis is given, that dimension is first incremented by 1 (staggered
-         / face-centered length) before broadcasting.
-      3) shape is a pair of tuples: (shape_rows, shape_cols):
-         In this format a dimension in either shape_rows or shape_cols can be singular.
-        This can be used to create a (possibly rectangular) matrix that couples two fields with different
-         (but same-rank) shapes. The working broadcast shape is
-         the elementwise max of shape_rows and shape_cols (adjusted by +1 along axis if
-         provided; matching staggered dims in rows/cols are expanded too). Result:
-             n_rows = prod(shape_rows)
-             n_cols = prod(shape_cols)
-             nnz    = prod(working_shape)
+    Modes
+    -----
+    1. shape is None
+       Treat coefficients as a flat sequence placed on the diagonal of an N×N matrix.
+
+    2. shape is a single tuple, e.g. ``(Nz, Nr, ...)``
+       Broadcast coefficients to that multidimensional shape (expanding leading size-1
+       dimensions as needed) then place all values on the diagonal of a square matrix of
+       size ``prod(shape)``. If ``axis`` is given, that dimension is first incremented
+       by 1 (staggered / face-centred length) before broadcasting.
+
+    3. shape is a pair of tuples: ``(shape_rows, shape_cols)``
+       A dimension in either ``shape_rows`` or ``shape_cols`` can be singular. This can
+       create a (possibly rectangular) matrix that couples two fields with different
+       (but same-rank) shapes. The working broadcast shape is the element-wise maximum
+       of ``shape_rows`` and ``shape_cols`` (adjusted by +1 along ``axis`` if provided;
+       matching staggered dims in rows/cols are expanded too).
+
+       Result::
+
+           n_rows = prod(shape_rows)
+           n_cols = prod(shape_cols)
+           nnz    = prod(working_shape)
 
     Parameters
     ----------
