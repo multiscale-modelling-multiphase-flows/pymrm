@@ -1,3 +1,5 @@
+name: Update CITATION.cff
+
 jobs:
   update-cff:
     runs-on: ubuntu-latest
