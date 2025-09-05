@@ -6,11 +6,13 @@ on:
       - 'CITATION.cff'
 
 jobs:
-  validate:
+  validate-cff:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Validate CITATION.cff
-        uses: citation-file-format/cffconvert-github-action@v2
+        uses: citation-file-format/cffconvert-github-action@2.0.0
         with:
           args: "--validate"
