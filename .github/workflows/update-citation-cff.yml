@@ -31,7 +31,7 @@ jobs:
           Rscript -e 'library(cffr); cff_gha_update(path=".", overwrite=FALSE)'
           git config user.name "GitHub Action"
           git config user.email "action@github.com"
-          git add CITATION.cff
-          git commit -m "chore: automatic CITATION.cff update"
-          git push || echo "Nothing to push"
+          git add CITATION.cff .github/workflows/update-citation-cff.yml
+          git commit -m "chore: automatic CITATION.cff update" || echo "::notice::Nothing to commit"
+          git push || echo "::notice::Nothing to push"
 

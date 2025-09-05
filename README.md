@@ -1,5 +1,7 @@
 # pymrm: Python Package for Multiphase Reactor Modeling
 
+[![DOI](https://zenodo.org/badge/901029258.svg)](https://zenodo.org/badge/latestdoi/901029258)
+
 ## Overview
 
 pymrm is a Python package for modeling multiphase reactors, developed as part of the Multiphase Reactor Modeling course at Eindhoven University of Technology. Originally implemented in Matlab, pymrm is now a Python-based, open-access tool designed for accessibility and advanced modeling.
