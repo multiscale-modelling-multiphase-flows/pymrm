@@ -9,7 +9,7 @@ authors:
 date-released: "2025-09-05"
 identifiers:
   - type: doi
-    value: 10.5281/zenodo.1234567
+    value: 10.5281/zenodo.xxxxxx
 abstract: "pymrm is a Python package for multiphase reactor modeling."
 keywords:
   - modeling
