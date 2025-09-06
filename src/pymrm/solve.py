@@ -11,7 +11,16 @@ from scipy.linalg import norm
 from scipy.optimize import OptimizeResult
 
 
-def newton(function, initial_guess, args=(), tol=1.49012e-08, maxfev=100, solver=None, lin_solver_kwargs=None, callback=None):
+def newton(
+    function,
+    initial_guess,
+    args=(),
+    tol=1.49012e-08,
+    maxfev=100,
+    solver=None,
+    lin_solver_kwargs=None,
+    callback=None,
+):
     """
     Perform Newton-Raphson iterations to solve nonlinear systems of equations.
 
@@ -51,16 +60,19 @@ def newton(function, initial_guess, args=(), tol=1.49012e-08, maxfev=100, solver
     """
     n = initial_guess.size
     if solver is None:
-        solver = 'spsolve' if n < 50000 else 'bicgstab'
+        solver = "spsolve" if n < 50000 else "bicgstab"
 
     if lin_solver_kwargs is None:
         lin_solver_kwargs = {}
 
     # Select linear solver
-    if solver == 'spsolve':
+    if solver == "spsolve":
+
         def linsolver(jac_matrix, g, **kwargs):
             return linalg.spsolve(jac_matrix, g, **kwargs)
-    elif solver == 'cg':
+
+    elif solver == "cg":
+
         def linsolver(jac_matrix, g, **kwargs):
             Jac_iLU = linalg.spilu(jac_matrix)
             M = linalg.LinearOperator((n, n), Jac_iLU.solve)
@@ -68,7 +80,9 @@ def newton(function, initial_guess, args=(), tol=1.49012e-08, maxfev=100, solver
             if info != 0:
                 raise RuntimeError(f"CG did not converge, info={info}")
             return dx_neg
-    elif solver == 'bicgstab':
+
+    elif solver == "bicgstab":
+
         def linsolver(jac_matrix, g, **kwargs):
             Jac_iLU = linalg.spilu(jac_matrix)
             M = linalg.LinearOperator((n, n), Jac_iLU.solve)
@@ -76,9 +90,12 @@ def newton(function, initial_guess, args=(), tol=1.49012e-08, maxfev=100, solver
             if info != 0:
                 raise RuntimeError(f"BICGSTAB did not converge, info={info}")
             return dx_neg
+
     elif callable(solver):
+
         def linsolver(jac_matrix, g, **kwargs):
             return solver(jac_matrix, g, **kwargs)
+
     else:
         raise ValueError("Unsupported solver method.")
 
@@ -91,12 +108,16 @@ def newton(function, initial_guess, args=(), tol=1.49012e-08, maxfev=100, solver
         if callback:
             callback(x, g)
         if defect < tol:
-            return OptimizeResult(x=x, success=True, nit=it + 1, fun=g, message='Converged')
+            return OptimizeResult(
+                x=x, success=True, nit=it + 1, fun=g, message="Converged"
+            )
 
-    return OptimizeResult(x=x, success=False, nit=maxfev, fun=g, message='Did not converge')
+    return OptimizeResult(
+        x=x, success=False, nit=maxfev, fun=g, message="Did not converge"
+    )
 
 
-def clip_approach(values, function, lower_bounds=0, upper_bounds=None, factor=0):
+def clip_approach(values, dummy, lower_bounds=0, upper_bounds=None, factor=0):
     """
     Apply bounds and an approach factor to an array of values.
 
@@ -106,8 +127,7 @@ def clip_approach(values, function, lower_bounds=0, upper_bounds=None, factor=0)
 
     Args:
         values (ndarray): The array of values to be modified.
-        function (callable): A function to apply to the values (not used in the
-            current implementation but reserved for future extensions).
+        dummy: Not used in the current implementation but reserved for future extensions.
         lower_bounds (float or ndarray, optional): The lower bounds for the values.
             Can be a scalar or an array of the same shape as `values`. Default is 0.
         upper_bounds (float or ndarray, optional): The upper bounds for the values.
@@ -124,13 +144,16 @@ def clip_approach(values, function, lower_bounds=0, upper_bounds=None, factor=0)
         np.clip(values, lower_bounds, upper_bounds, out=values)
     else:
         if lower_bounds is not None:
-            below_lower = (values < lower_bounds)
+            below_lower = values < lower_bounds
             if np.any(below_lower):
                 broadcasted_lower_bounds = np.broadcast_to(lower_bounds, values.shape)
-                values[below_lower] = (1.0 + factor) * broadcasted_lower_bounds[below_lower] - factor * values[below_lower]
+                values[below_lower] = (1.0 + factor) * broadcasted_lower_bounds[
+                    below_lower
+                ] - factor * values[below_lower]
         if upper_bounds is not None:
-            above_upper = (values > upper_bounds)
+            above_upper = values > upper_bounds
             if np.any(above_upper):
                 broadcasted_upper_bounds = np.broadcast_to(upper_bounds, values.shape)
-                values[above_upper] = (1.0 + factor) * broadcasted_upper_bounds[above_upper] - factor * values[above_upper]
-
+                values[above_upper] = (1.0 + factor) * broadcasted_upper_bounds[
+                    above_upper
+                ] - factor * values[above_upper]

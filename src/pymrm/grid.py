@@ -2,8 +2,8 @@
 Grid Generation Submodule for pymrm
 -----------------------------------
 
-This submodule provides essential functions for creating structured grids 
-used in multiphase reactor modeling. It includes uniform and non-uniform 
+This submodule provides essential functions for creating structured grids
+used in multiphase reactor modeling. It includes uniform and non-uniform
 grid generation methods.
 
 Functions:
@@ -54,7 +54,7 @@ def generate_grid(size, x_f=None, generate_x_c=False, x_c=None):
         x_c (np.ndarray, optional): User-defined cell-centered positions (optional).
 
     Returns:
-        np.ndarray or tuple[np.ndarray, np.ndarray]: 
+        np.ndarray or tuple[np.ndarray, np.ndarray]:
             - Face positions (x_f)
             - Cell-centered positions (x_c) if `generate_x_c` is True
     """

@@ -110,23 +110,31 @@ def construct_coefficient_matrix(coefficients, shape=None, axis=None):
     Rectangular coupling (cell centers -> axial faces):
         A = construct_coefficient_matrix(alpha, shape=((1, Nr), (Nz, Nr)), axis=0)
     """
-    if (shape is None):
-        coeff_matrix = csc_array(diags(coefficients.ravel(), format='csc'))
+    if shape is None:
+        coeff_matrix = csc_array(diags(coefficients.ravel(), format="csc"))
     elif all(isinstance(t, tuple) for t in shape):
         shape_rows = shape[0]
         shape_cols = shape[1]
         working_shape = tuple(max(s1, s2) for s1, s2 in zip(shape_rows, shape_cols))
         if axis is not None:
-            working_shape = tuple(s if i != axis else s + 1 for i, s in enumerate(working_shape))
-            if shape_rows[axis]+1 == working_shape[axis]:
-                shape_rows = tuple(s if i != axis else s + 1 for i, s in enumerate(shape_rows))
-            if shape_cols[axis]+1 == working_shape[axis]:
-                shape_cols = tuple(s if i != axis else s + 1 for i, s in enumerate(shape_cols))
+            working_shape = tuple(
+                s if i != axis else s + 1 for i, s in enumerate(working_shape)
+            )
+            if shape_rows[axis] + 1 == working_shape[axis]:
+                shape_rows = tuple(
+                    s if i != axis else s + 1 for i, s in enumerate(shape_rows)
+                )
+            if shape_cols[axis] + 1 == working_shape[axis]:
+                shape_cols = tuple(
+                    s if i != axis else s + 1 for i, s in enumerate(shape_cols)
+                )
         if coefficients.shape == working_shape:
             coefficients_copy = coefficients
         else:
             coefficients_copy = np.array(coefficients)
-            shape_coeff = (1,) * (len(working_shape) - coefficients_copy.ndim) + coefficients_copy.shape
+            shape_coeff = (1,) * (
+                len(working_shape) - coefficients_copy.ndim
+            ) + coefficients_copy.shape
             coefficients_copy = coefficients_copy.reshape(shape_coeff)
             coefficients_copy = np.broadcast_to(coefficients_copy, working_shape)
         num_rows = math.prod(shape_rows)
@@ -135,13 +143,17 @@ def construct_coefficient_matrix(coefficients, shape=None, axis=None):
         num_cols = math.prod(shape_cols)
         cols = np.arange(num_cols).reshape(shape_cols)
         cols = np.broadcast_to(cols, working_shape).ravel()
-        coeff_matrix = csc_array((coefficients_copy.ravel(), (rows, cols)), shape=(num_rows, num_cols))
+        coeff_matrix = csc_array(
+            (coefficients_copy.ravel(), (rows, cols)), shape=(num_rows, num_cols)
+        )
     else:
         if axis is not None:
             shape = tuple(s if i != axis else s + 1 for i, s in enumerate(shape))
         coefficients_copy = np.array(coefficients)
-        shape_coeff = (1,) * (len(shape) - coefficients_copy.ndim) + coefficients_copy.shape
+        shape_coeff = (1,) * (
+            len(shape) - coefficients_copy.ndim
+        ) + coefficients_copy.shape
         coefficients_copy = coefficients_copy.reshape(shape_coeff)
         coefficients_copy = np.broadcast_to(coefficients_copy, shape)
-        coeff_matrix = csc_array(diags(coefficients_copy.ravel(), format='csc'))
+        coeff_matrix = csc_array(diags(coefficients_copy.ravel(), format="csc"))
     return coeff_matrix
