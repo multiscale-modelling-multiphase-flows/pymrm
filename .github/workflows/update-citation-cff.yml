@@ -28,7 +28,7 @@ jobs:
 
       - name: Update CITATION.cff
         run: |
-          Rscript -e 'library(cffr); cff_gha_update(path=".", overwrite=FALSE)'
+          Rscript -e 'library(cffr); cff_gha_update(path = ".github/workflows/update-citation-cff.yml", overwrite = TRUE)'
           git config user.name "GitHub Action"
           git config user.email "action@github.com"
           git add CITATION.cff .github/workflows/update-citation-cff.yml
