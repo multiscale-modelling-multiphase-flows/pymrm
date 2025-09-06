@@ -34,4 +34,4 @@ jobs:
           git config user.email "action@github.com"
           git add CITATION.cff
           git commit -m "chore: update CITATION.cff for version ${VERSION}" || echo "::notice::Nothing to commit"
-          git push || echo "::notice::Nothing to push"
+          git push origin HEAD:main || echo "::notice::Nothing to push"
