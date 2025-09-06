@@ -15,23 +15,22 @@ jobs:
         with:
           persist-credentials: true  # Allows the action to push changes
 
-      - name: Install system dependencies
+      - name: Extract version and date
+        id: vars
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y libcurl4-openssl-dev
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          DATE=$(date +'%Y-%m-%d')
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "DATE=$DATE" >> $GITHUB_ENV
 
-      - name: Setup R environment
-        uses: r-lib/actions/setup-r@v2
-
-      - name: Install dependencies via pak or setup-r-dependencies
-        run: Rscript -e "install.packages('cffr', repos='https://cloud.r-project.org')"
-
-      - name: Update CITATION.cff
+      - name: Update version and date in CITATION.cff
         run: |
-          Rscript -e 'library(cffr); cff_gha_update(path = ".github/workflows/update-citation-cff.yml", overwrite = TRUE)'
+          sed -i "s/^version: .*/version: \"${VERSION}\"/" CITATION.cff
+          sed -i "s/^date-released: .*/date-released: ${DATE}/" CITATION.cff
+      - name: Commit and push CITATION.cff
+        run: |
           git config user.name "GitHub Action"
           git config user.email "action@github.com"
-          git add CITATION.cff .github/workflows/update-citation-cff.yml
-          git commit -m "chore: automatic CITATION.cff update" || echo "::notice::Nothing to commit"
+          git add CITATION.cff
+          git commit -m "chore: update CITATION.cff for version ${VERSION}" || echo "::notice::Nothing to commit"
           git push || echo "::notice::Nothing to push"
-
